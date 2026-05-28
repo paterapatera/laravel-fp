@@ -136,7 +136,7 @@ final class Result
      * @param  callable(mixed): TNext  $callback
      * @return callable(self): self
      */
-    public static function pipeMap(callable $callback): callable
+    public static function pMap(callable $callback): callable
     {
         return fn (self $result): self => $result->map($callback);
     }
@@ -148,7 +148,7 @@ final class Result
      * @param  callable(mixed): self<TValue2, TError2>  $callback
      * @return callable(self): self
      */
-    public static function pipeBind(callable $callback): callable
+    public static function pBind(callable $callback): callable
     {
         return fn (self $result): self => $result->bind($callback);
     }

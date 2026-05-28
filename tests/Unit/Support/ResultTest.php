@@ -162,14 +162,14 @@ test('bind はログを左から右へ結合する', function () {
 });
 
 test('pipeMap は単引数 callable を返す', function () {
-    $pipe = Result::pipeMap(fn (int $n): int => $n + 5);
+    $pipe = Result::pMap(fn (int $n): int => $n + 5);
     $result = $pipe(Result::ok(10));
 
     expect($result->get())->toBe(15);
 });
 
 test('pipeBind は単引数 callable を返す', function () {
-    $pipe = Result::pipeBind(fn (int $n) => Result::ok($n * 2));
+    $pipe = Result::pBind(fn (int $n) => Result::ok($n * 2));
     $result = $pipe(Result::ok(4));
 
     expect($result->get())->toBe(8);
@@ -177,22 +177,25 @@ test('pipeBind は単引数 callable を返す', function () {
 
 test('パイプ演算子で map と bind を連鎖できる', function () {
     $result = Result::ok(2)
-        |> Result::pipeBind(fn (int $n) => Result::ok($n + 1))
-        |> Result::pipeMap(fn (int $n): int => $n * 3);
+        |> Result::pBind(fn (int $n) => Result::ok($n + 1))
+        |> Result::pMap(fn (int $n): int => $n * 3);
 
     expect($result->get())->toBe(9);
 })->skip(fn (): bool => PHP_VERSION_ID < 80500, 'パイプ演算子には PHP 8.5 以上が必要');
 
 test('doo はすべて成功時に最終的な成功 Result を返す', function () {
-    $result = Result::doo(function () {
-        yield Result::ok(1);
-        yield Result::ok(2);
-
-        return null;
+    $entry = new class implements LogEntry {};
+    $f1 = fn () => Result::ok(1, collect([$entry]));
+    $f2 = fn () => Result::ok(2, collect([$entry]));
+    $result = Result::doo(function () use ($f1, $f2, $entry) {
+        yield $a = $f1();
+        yield $b = $f2();
+        yield Result::ok([$a->get(), $b->get()], collect([$entry]));
     });
 
+    expect($result->logs()->all())->toBe([$entry, $entry, $entry]);
     expect($result->isOk())->toBeTrue()
-        ->and($result->get())->toBe(2);
+        ->and($result->get())->toBe([1, 2]);
 });
 
 test('doo は最初の失敗で以降の評価を中断する', function () {
@@ -203,8 +206,6 @@ test('doo は最初の失敗で以降の評価を中断する', function () {
         $evaluated++;
         yield Result::err('stop');
         $evaluated++;
-
-        return null;
     });
 
     expect($result->isErr())->toBeTrue()
@@ -219,8 +220,6 @@ test('doo は評価順にログを結合する', function () {
     $result = Result::doo(function () use ($a, $b) {
         yield Result::ok(1, collect([$a]));
         yield Result::ok(2, collect([$b]));
-
-        return null;
     });
 
     expect($result->logs()->all())->toBe([$a, $b]);
@@ -233,8 +232,6 @@ test('doo は失敗時に中断時点までのログを結合する', function (
     $result = Result::doo(function () use ($a, $b) {
         yield Result::ok(1, collect([$a]));
         yield Result::err('fail', collect([$b]));
-
-        return null;
     });
 
     expect($result->isErr())->toBeTrue()
@@ -244,8 +241,6 @@ test('doo は失敗時に中断時点までのログを結合する', function (
 test('doo は Result 以外の yield を拒否する', function () {
     expect(fn () => Result::doo(function () {
         yield 42;
-
-        return null;
     }))->toThrow(InvalidArgumentException::class, 'Result');
 });
 
