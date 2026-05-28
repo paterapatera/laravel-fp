@@ -1,25 +1,14 @@
 <?php
 
-namespace Tests\Unit\Support\Exceptions;
-
 use App\Support\Exceptions\ResultUnwrapException;
-use LogicException;
-use PHPUnit\Framework\TestCase;
 
-class ResultUnwrapExceptionTest extends TestCase
-{
-    public function test_extends_logic_exception(): void
-    {
-        $exception = new ResultUnwrapException;
+test('ResultUnwrapException は LogicException を継承する', function () {
+    expect(new ResultUnwrapException)->toBeInstanceOf(LogicException::class);
+});
 
-        $this->assertInstanceOf(LogicException::class, $exception);
-    }
+test('メッセージは失敗 Result の unwrap 不可を示す', function () {
+    $message = strtolower((new ResultUnwrapException)->getMessage());
 
-    public function test_message_indicates_failed_result_unwrap(): void
-    {
-        $exception = new ResultUnwrapException;
-
-        $this->assertStringContainsString('unwrap', strtolower($exception->getMessage()));
-        $this->assertStringContainsString('failed', strtolower($exception->getMessage()));
-    }
-}
+    expect($message)->toContain('unwrap')
+        ->and($message)->toContain('failed');
+});

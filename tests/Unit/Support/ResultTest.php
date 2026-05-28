@@ -1,303 +1,258 @@
 <?php
 
-namespace Tests\Unit\Support;
-
 use App\Contracts\LogEntry;
 use App\Support\Exceptions\ResultUnwrapException;
 use App\Support\Result;
 use Illuminate\Support\Collection;
-use InvalidArgumentException;
-use PHPUnit\Framework\Attributes\RequiresPhp;
-use PHPUnit\Framework\TestCase;
 
-class ResultTest extends TestCase
-{
-    public function test_ok_is_success_and_not_failure(): void
+test('ok は成功状態であり失敗状態ではない', function () {
+    $result = Result::ok(42);
+
+    expect($result->isOk())->toBeTrue()
+        ->and($result->isErr())->toBeFalse();
+});
+
+test('err は失敗状態であり成功状態ではない', function () {
+    $result = Result::err('reason');
+
+    expect($result->isOk())->toBeFalse()
+        ->and($result->isErr())->toBeTrue();
+});
+
+test('成功値と失敗理由は排他的である', function () {
+    $ok = Result::ok('value');
+    $err = Result::err('reason');
+
+    expect($ok->get())->toBe('value')
+        ->and($err->error())->toBe('reason')
+        ->and($ok->error())->toBeNull();
+
+    expect(fn () => $err->get())->toThrow(ResultUnwrapException::class);
+});
+
+test('ok は明示的なログ collection を受け取れる', function () {
+    $entry = new class implements LogEntry {};
+    $logs = collect([$entry]);
+
+    $result = Result::ok('value', $logs);
+
+    expect($result->logs())->toHaveCount(1)
+        ->and($result->logs()->first())->toBe($entry);
+});
+
+test('err は明示的なログ collection を受け取れる', function () {
+    $entry = new class implements LogEntry {};
+    $logs = collect([$entry]);
+
+    $result = Result::err('reason', $logs);
+
+    expect($result->logs())->toHaveCount(1);
+});
+
+test('ログ省略時の ok は空の collection を保持する', function () {
+    $result = Result::ok('value');
+
+    expect($result->logs())->toBeInstanceOf(Collection::class)
+        ->and($result->logs()->isEmpty())->toBeTrue();
+});
+
+test('ログ省略時の err は空の collection を保持する', function () {
+    $result = Result::err('reason');
+
+    expect($result->logs()->isEmpty())->toBeTrue();
+});
+
+test('get は成功時に値を返す', function () {
+    expect(Result::ok(10)->get())->toBe(10);
+});
+
+test('getOr は失敗時に代替値を返す', function () {
+    expect(Result::err('reason')->getOr('fallback'))->toBe('fallback');
+});
+
+test('getOr は成功時に保持している値を返す', function () {
+    expect(Result::ok(7)->getOr(0))->toBe(7);
+});
+
+test('失敗時の get は ResultUnwrapException を投げる', function () {
+    expect(fn () => Result::err('boom')->get())->toThrow(ResultUnwrapException::class);
+});
+
+test('error は例外メッセージに依存せず失敗理由を返す', function () {
+    $reason = new class
     {
-        $result = Result::ok(42);
+        public string $code = 'E42';
+    };
 
-        $this->assertTrue($result->isOk());
-        $this->assertFalse($result->isErr());
-    }
+    $result = Result::err($reason);
 
-    public function test_err_is_failure_and_not_success(): void
-    {
-        $result = Result::err('reason');
+    expect($result->error())->toBe($reason)
+        ->and($result->error()->code)->toBe('E42');
+});
 
-        $this->assertFalse($result->isOk());
-        $this->assertTrue($result->isErr());
-    }
+test('map は成功時に値を変換する', function () {
+    $result = Result::ok(2)->map(fn (int $n): int => $n * 3);
 
-    public function test_ok_and_err_are_mutually_exclusive_for_value_and_reason(): void
-    {
-        $ok = Result::ok('value');
-        $err = Result::err('reason');
+    expect($result->isOk())->toBeTrue()
+        ->and($result->get())->toBe(6);
+});
 
-        $this->assertSame('value', $ok->get());
-        $this->assertSame('reason', $err->error());
-        $this->assertNull($ok->error());
+test('map は失敗時にコールバックを呼ばず理由を保持する', function () {
+    $called = false;
+    $result = Result::err('fail')
+        ->map(function (mixed $value) use (&$called): mixed {
+            $called = true;
 
-        $this->expectException(ResultUnwrapException::class);
-        $err->get();
-    }
-
-    public function test_ok_accepts_explicit_logs(): void
-    {
-        $entry = new class implements LogEntry {};
-        $logs = collect([$entry]);
-
-        $result = Result::ok('value', $logs);
-
-        $this->assertCount(1, $result->logs());
-        $this->assertSame($entry, $result->logs()->first());
-    }
-
-    public function test_err_accepts_explicit_logs(): void
-    {
-        $entry = new class implements LogEntry {};
-        $logs = collect([$entry]);
-
-        $result = Result::err('reason', $logs);
-
-        $this->assertCount(1, $result->logs());
-    }
-
-    public function test_ok_without_logs_uses_empty_collection(): void
-    {
-        $result = Result::ok('value');
-
-        $this->assertInstanceOf(Collection::class, $result->logs());
-        $this->assertTrue($result->logs()->isEmpty());
-    }
-
-    public function test_err_without_logs_uses_empty_collection(): void
-    {
-        $result = Result::err('reason');
-
-        $this->assertTrue($result->logs()->isEmpty());
-    }
-
-    public function test_get_returns_value_on_success(): void
-    {
-        $this->assertSame(10, Result::ok(10)->get());
-    }
-
-    public function test_get_or_returns_default_on_failure(): void
-    {
-        $result = Result::err('reason');
-
-        $this->assertSame('fallback', $result->getOr('fallback'));
-    }
-
-    public function test_get_or_returns_value_on_success(): void
-    {
-        $this->assertSame(7, Result::ok(7)->getOr(0));
-    }
-
-    public function test_get_on_failure_throws_result_unwrap_exception(): void
-    {
-        $this->expectException(ResultUnwrapException::class);
-
-        Result::err('boom')->get();
-    }
-
-    public function test_error_returns_reason_without_using_exception_message(): void
-    {
-        $reason = new class
-        {
-            public string $code = 'E42';
-        };
-
-        $result = Result::err($reason);
-
-        $this->assertSame($reason, $result->error());
-        $this->assertSame('E42', $result->error()->code);
-    }
-
-    public function test_map_transforms_success_value(): void
-    {
-        $result = Result::ok(2)->map(fn (int $n): int => $n * 3);
-
-        $this->assertTrue($result->isOk());
-        $this->assertSame(6, $result->get());
-    }
-
-    public function test_map_skips_callback_on_failure_and_preserves_reason(): void
-    {
-        $called = false;
-        $result = Result::err('fail')
-            ->map(function (mixed $value) use (&$called): mixed {
-                $called = true;
-
-                return $value;
-            });
-
-        $this->assertFalse($called);
-        $this->assertTrue($result->isErr());
-        $this->assertSame('fail', $result->error());
-    }
-
-    public function test_map_preserves_logs_on_failure(): void
-    {
-        $entry = new class implements LogEntry {};
-        $result = Result::err('fail', collect([$entry]))->map(fn (mixed $v) => $v);
-
-        $this->assertCount(1, $result->logs());
-        $this->assertSame($entry, $result->logs()->first());
-    }
-
-    public function test_map_retains_logs_on_success(): void
-    {
-        $entry = new class implements LogEntry {};
-
-        $result = Result::ok(1, collect([$entry]))->map(fn (int $n): int => $n + 1);
-
-        $this->assertSame(2, $result->get());
-        $this->assertSame([$entry], $result->logs()->all());
-    }
-
-    public function test_bind_chains_success_results(): void
-    {
-        $result = Result::ok(1)
-            ->bind(fn (int $n) => Result::ok($n + 1));
-
-        $this->assertTrue($result->isOk());
-        $this->assertSame(2, $result->get());
-    }
-
-    public function test_bind_short_circuits_on_failure_without_calling_callback(): void
-    {
-        $called = false;
-
-        $result = Result::err('fail')
-            ->bind(function (mixed $value) use (&$called) {
-                $called = true;
-
-                return Result::ok($value);
-            });
-
-        $this->assertFalse($called);
-        $this->assertSame('fail', $result->error());
-    }
-
-    public function test_bind_merges_logs_left_to_right(): void
-    {
-        $left = new class implements LogEntry {};
-        $right = new class implements LogEntry {};
-
-        $result = Result::ok(1, collect([$left]))
-            ->bind(fn (int $n) => Result::ok($n, collect([$right])));
-
-        $this->assertCount(2, $result->logs());
-        $this->assertSame([$left, $right], $result->logs()->all());
-    }
-
-    public function test_pipe_map_returns_unary_callable(): void
-    {
-        $pipe = Result::pipeMap(fn (int $n): int => $n + 5);
-        $result = $pipe(Result::ok(10));
-
-        $this->assertSame(15, $result->get());
-    }
-
-    public function test_pipe_bind_returns_unary_callable(): void
-    {
-        $pipe = Result::pipeBind(fn (int $n) => Result::ok($n * 2));
-        $result = $pipe(Result::ok(4));
-
-        $this->assertSame(8, $result->get());
-    }
-
-    #[RequiresPhp('8.5')]
-    public function test_pipe_operator_chains_map_and_bind(): void
-    {
-        $result = Result::ok(2)
-            |> Result::pipeBind(fn (int $n) => Result::ok($n + 1))
-            |> Result::pipeMap(fn (int $n): int => $n * 3);
-
-        $this->assertSame(9, $result->get());
-    }
-
-    public function test_doo_returns_final_success_when_all_steps_succeed(): void
-    {
-        $result = Result::doo(function () {
-            yield Result::ok(1);
-            yield Result::ok(2);
-
-            return null;
+            return $value;
         });
 
-        $this->assertTrue($result->isOk());
-        $this->assertSame(2, $result->get());
-    }
+    expect($called)->toBeFalse()
+        ->and($result->isErr())->toBeTrue()
+        ->and($result->error())->toBe('fail');
+});
 
-    public function test_doo_short_circuits_on_first_failure(): void
-    {
-        $evaluated = 0;
+test('map は失敗時にログを保持する', function () {
+    $entry = new class implements LogEntry {};
+    $result = Result::err('fail', collect([$entry]))->map(fn (mixed $v) => $v);
 
-        $result = Result::doo(function () use (&$evaluated) {
-            yield Result::ok(1);
-            $evaluated++;
-            yield Result::err('stop');
-            $evaluated++;
+    expect($result->logs())->toHaveCount(1)
+        ->and($result->logs()->first())->toBe($entry);
+});
 
-            return null;
+test('map は成功時にログを維持する', function () {
+    $entry = new class implements LogEntry {};
+
+    $result = Result::ok(1, collect([$entry]))->map(fn (int $n): int => $n + 1);
+
+    expect($result->get())->toBe(2)
+        ->and($result->logs()->all())->toBe([$entry]);
+});
+
+test('bind は成功時に Result を連鎖する', function () {
+    $result = Result::ok(1)
+        ->bind(fn (int $n) => Result::ok($n + 1));
+
+    expect($result->isOk())->toBeTrue()
+        ->and($result->get())->toBe(2);
+});
+
+test('bind は失敗時にコールバックを呼ばず短絡する', function () {
+    $called = false;
+
+    $result = Result::err('fail')
+        ->bind(function (mixed $value) use (&$called) {
+            $called = true;
+
+            return Result::ok($value);
         });
 
-        $this->assertTrue($result->isErr());
-        $this->assertSame('stop', $result->error());
-        $this->assertSame(1, $evaluated);
-    }
+    expect($called)->toBeFalse()
+        ->and($result->error())->toBe('fail');
+});
 
-    public function test_doo_merges_logs_in_evaluation_order(): void
-    {
-        $a = new class implements LogEntry {};
-        $b = new class implements LogEntry {};
+test('bind はログを左から右へ結合する', function () {
+    $left = new class implements LogEntry {};
+    $right = new class implements LogEntry {};
 
-        $result = Result::doo(function () use ($a, $b) {
-            yield Result::ok(1, collect([$a]));
-            yield Result::ok(2, collect([$b]));
+    $result = Result::ok(1, collect([$left]))
+        ->bind(fn (int $n) => Result::ok($n, collect([$right])));
 
-            return null;
-        });
+    expect($result->logs())->toHaveCount(2)
+        ->and($result->logs()->all())->toBe([$left, $right]);
+});
 
-        $this->assertSame([$a, $b], $result->logs()->all());
-    }
+test('pipeMap は単引数 callable を返す', function () {
+    $pipe = Result::pipeMap(fn (int $n): int => $n + 5);
+    $result = $pipe(Result::ok(10));
 
-    public function test_doo_merges_logs_up_to_failure_point(): void
-    {
-        $a = new class implements LogEntry {};
-        $b = new class implements LogEntry {};
+    expect($result->get())->toBe(15);
+});
 
-        $result = Result::doo(function () use ($a, $b) {
-            yield Result::ok(1, collect([$a]));
-            yield Result::err('fail', collect([$b]));
+test('pipeBind は単引数 callable を返す', function () {
+    $pipe = Result::pipeBind(fn (int $n) => Result::ok($n * 2));
+    $result = $pipe(Result::ok(4));
 
-            return null;
-        });
+    expect($result->get())->toBe(8);
+});
 
-        $this->assertTrue($result->isErr());
-        $this->assertSame([$a, $b], $result->logs()->all());
-    }
+test('パイプ演算子で map と bind を連鎖できる', function () {
+    $result = Result::ok(2)
+        |> Result::pipeBind(fn (int $n) => Result::ok($n + 1))
+        |> Result::pipeMap(fn (int $n): int => $n * 3);
 
-    public function test_doo_rejects_non_result_yield(): void
-    {
-        $this->expectException(InvalidArgumentException::class);
-        $this->expectExceptionMessage('Result');
+    expect($result->get())->toBe(9);
+})->skip(fn (): bool => PHP_VERSION_ID < 80500, 'パイプ演算子には PHP 8.5 以上が必要');
 
-        Result::doo(function () {
-            yield 42;
+test('doo はすべて成功時に最終的な成功 Result を返す', function () {
+    $result = Result::doo(function () {
+        yield Result::ok(1);
+        yield Result::ok(2);
 
-            return null;
-        });
-    }
+        return null;
+    });
 
-    public function test_logs_returned_collection_does_not_mutate_internal_state(): void
-    {
-        $result = Result::ok('value', collect([]));
-        $logs = $result->logs();
-        $logs->push(new class implements LogEntry {});
+    expect($result->isOk())->toBeTrue()
+        ->and($result->get())->toBe(2);
+});
 
-        $this->assertTrue($result->logs()->isEmpty());
-    }
-}
+test('doo は最初の失敗で以降の評価を中断する', function () {
+    $evaluated = 0;
+
+    $result = Result::doo(function () use (&$evaluated) {
+        yield Result::ok(1);
+        $evaluated++;
+        yield Result::err('stop');
+        $evaluated++;
+
+        return null;
+    });
+
+    expect($result->isErr())->toBeTrue()
+        ->and($result->error())->toBe('stop')
+        ->and($evaluated)->toBe(1);
+});
+
+test('doo は評価順にログを結合する', function () {
+    $a = new class implements LogEntry {};
+    $b = new class implements LogEntry {};
+
+    $result = Result::doo(function () use ($a, $b) {
+        yield Result::ok(1, collect([$a]));
+        yield Result::ok(2, collect([$b]));
+
+        return null;
+    });
+
+    expect($result->logs()->all())->toBe([$a, $b]);
+});
+
+test('doo は失敗時に中断時点までのログを結合する', function () {
+    $a = new class implements LogEntry {};
+    $b = new class implements LogEntry {};
+
+    $result = Result::doo(function () use ($a, $b) {
+        yield Result::ok(1, collect([$a]));
+        yield Result::err('fail', collect([$b]));
+
+        return null;
+    });
+
+    expect($result->isErr())->toBeTrue()
+        ->and($result->logs()->all())->toBe([$a, $b]);
+});
+
+test('doo は Result 以外の yield を拒否する', function () {
+    expect(fn () => Result::doo(function () {
+        yield 42;
+
+        return null;
+    }))->toThrow(InvalidArgumentException::class, 'Result');
+});
+
+test('返却したログ collection の変更は内部状態に影響しない', function () {
+    $result = Result::ok('value', collect([]));
+    $logs = $result->logs();
+    $logs->push(new class implements LogEntry {});
+
+    expect($result->logs()->isEmpty())->toBeTrue();
+});
