@@ -8,7 +8,7 @@
   - _Requirements: 4.5, 7.3, 7.4_
   - _Boundary: LogEntry_
 
-- [ ] 1.2 パイプ演算子の検証方針を確定する
+- [x] 1.2 パイプ演算子の検証方針を確定する
   - プロジェクトの PHP 制約を確認し、パイプ構文を実行するテストを含めるか、利用例を PHPDoc のみとするかを決定する
   - 選択結果が後続の合成検証タスクの前提として明確である
   - _Requirements: 3.5, 6.5_
@@ -112,3 +112,7 @@
   - 失敗理由の取得と、返却したログ collection の変更が内部状態を変えないことがテストで確認できる
   - _Requirements: 4.1, 4.2, 4.3, 7.1_
   - _Depends: 2.2, 3.1_
+
+## Implementation Notes
+
+- **1.2 パイプ演算子**: Sail/CI は PHP 8.5.6。`composer.json` の `^8.3` は維持し、パイプ構文の**実行テスト**は `PHP_VERSION_ID >= 80500` のときのみ実行。PHPDoc・design の利用例は 8.5+ 前提。静的パイプヘルパーは PHP の同名制約のため `pipeMap` / `pipeBind`（`callable(Result): Result` を返す）。
