@@ -119,7 +119,7 @@ final class Result
      * @template TError2
      *
      * @param  callable(TValue): self<TValue2, TError2>  $callback
-     * @return self<TValue2, TError|TError2>
+     * @return self<TValue2, TError2>|self<TValue, TError>
      */
     public function bind(callable $callback): self
     {
@@ -133,8 +133,8 @@ final class Result
     /**
      * @template TNext
      *
-     * @param  callable(mixed): TNext  $callback
-     * @return callable(self): self
+     * @param  callable(TValue): TNext  $callback
+     * @return callable(self<TValue, TError>): self<TNext, TError>
      */
     public static function pMap(callable $callback): callable
     {
@@ -145,8 +145,8 @@ final class Result
      * @template TValue2
      * @template TError2
      *
-     * @param  callable(mixed): self<TValue2, TError2>  $callback
-     * @return callable(self): self
+     * @param  callable(TValue): self<TValue2, TError2>  $callback
+     * @return callable(self<TValue, TError>): self<TValue2, TError2>
      */
     public static function pBind(callable $callback): callable
     {
@@ -164,6 +164,7 @@ final class Result
     {
         $generator = $callback();
 
+        /** @phpstan-ignore instanceof.alwaysTrue */
         if (! $generator instanceof Generator) {
             throw new InvalidArgumentException('doo callback must return a Generator that yields Result instances.');
         }
@@ -173,6 +174,7 @@ final class Result
         $hasYield = false;
 
         foreach ($generator as $yielded) {
+            /** @phpstan-ignore instanceof.alwaysTrue */
             if (! $yielded instanceof self) {
                 throw new InvalidArgumentException('doo generator must only yield Result instances.');
             }
@@ -208,7 +210,7 @@ final class Result
      * @template TError2
      *
      * @param  self<TValue2, TError2>  $other
-     * @return self<TValue2, TError|TError2>
+     * @return self<TValue2, TError2>|self<TValue, TError>
      */
     private function mergeWith(self $other): self
     {
