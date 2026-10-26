@@ -1,0 +1,11 @@
+{
+  "version": "0.3.0",
+  "formatVersion": 1,
+  "docsDir": "docs/sdd",
+  "lang": "ja",
+  "skillsDir": [
+    ".agents"
+  ],
+  "runtime": "bun",
+  "baseBranch": "main"
+}
