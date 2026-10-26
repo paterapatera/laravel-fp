@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-const PACKAGE_VERSION = "0.3.1";
+const PACKAGE_VERSION = "0.3.2";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
@@ -37,8 +37,8 @@ const SPEC_H2 = ["Purpose", "Scope", "Definitions", "Identifier", "Requirements"
 const LOCKED_SECTIONS = new Set(["Identifier", "Status"]);
 
 const EARS = {
-  en: { shall: "SHALL", given: "**Given**", when: "**When**", then: "**Then**", suite: "full existing test suite" },
-  ja: { shall: "しなければならない", given: "**前提**", when: "**もし**", then: "**ならば**", suite: "既存のテストをすべて実行" },
+  en: { given: "**Given**", when: "**When**", then: "**Then**", suite: "full existing test suite" },
+  ja: { given: "**前提**", when: "**もし**", then: "**ならば**", suite: "既存のテストをすべて実行" },
 };
 
 function localDate(date = new Date()) {
@@ -476,7 +476,7 @@ function fileRecord(nodes, index) {
     if (title === "SECTIONS") {
       for (const item of childIndexes(nodes, child)) {
         const parsed = parseMeta(nodes[item].full);
-        record.sections.push({ title: nodes[item].title, base: parsed.meta.base || "", content: parsed.content, line: nodes[item].line });
+        record.sections.push({ title: nodes[item].title, base: parsed.meta.base || "", rationale: parsed.meta.rationale || "", content: parsed.content, line: nodes[item].line });
       }
     } else if (title === "ADDED" || title === "MODIFIED" || title === "REMOVED") {
       const bucket = title === "ADDED" ? record.added : title === "MODIFIED" ? record.modified : record.removed;
@@ -586,6 +586,18 @@ function requirementSentence(body) {
     lines.push(line);
   }
   return lines.join("\n").trim();
+}
+
+const QUOTED = /「[^」]*」|『[^』]*』|“[^”]*”|"[^"\n]*"|`[^`\n]*`/g;
+
+function shallProblem(sentence, lang) {
+  const text = sentence.replace(QUOTED, "");
+  if (lang === "ja") {
+    if (text.split("なければなら").length - 1 !== 1) return "must contain exactly one なければならない";
+    if (!/なければならない(?=。|\s*$)/.test(text)) return "must end its obligation with なければならない";
+    return "";
+  }
+  return text.split(/\bSHALL\b/).length - 1 === 1 ? "" : "must contain exactly one SHALL";
 }
 
 function scenarioBlocks(body) {
@@ -1683,11 +1695,10 @@ function validateItems(docsDir, rel, text, lang, removed, seen, diags, options) 
     if (seen.has(id)) diags.push(diag(rel, node.line, "ID_DUPLICATE", `${id} is also defined in ${seen.get(id)}`));
     else seen.set(id, rel);
     if (removed.has(id)) diags.push(diag(rel, node.line, "ID_REUSED", `${id} was removed and cannot be reused`));
-    const sentence = requirementSentence(node.full);
     const ears = EARS[lang] || EARS.en;
-    const count = lang === "ja" ? sentence.split(ears.shall).length - 1 : sentence.split(/\bSHALL\b/).length - 1;
     if (filename !== "interfaces.md" || !/^-\s+Direction:\s*Consumed/m.test(node.full)) {
-      if (count !== 1) diags.push(diag(rel, node.line, "EARS_SHALL", `${id} must contain exactly one ${ears.shall}`));
+      const problem = shallProblem(requirementSentence(node.full), lang);
+      if (problem) diags.push(diag(rel, node.line, "EARS_SHALL", `${id} ${problem}`));
     }
     if (filename === "spec.md") {
       const scenarios = headingNodes(node.full).filter((item) => item.title.startsWith("Scenario:"));
@@ -1985,9 +1996,8 @@ function validateDeltaEars(delta, lang, diags) {
   for (const file of delta.files) {
     for (const item of [...file.added, ...file.modified]) {
       if (!/^(REQ|IF|DATA|NFR)-/.test(item.title)) continue;
-      const sentence = requirementSentence(item.content);
-      const count = lang === "ja" ? sentence.split(ears.shall).length - 1 : sentence.split(/\bSHALL\b/).length - 1;
-      if (count !== 1 && !/^-\s+Direction:\s*Consumed/m.test(item.content)) diags.push(diag(file.path, item.line, "EARS_SHALL", `${item.title} must contain exactly one ${ears.shall}`));
+      const problem = shallProblem(requirementSentence(item.content), lang);
+      if (problem && !/^-\s+Direction:\s*Consumed/m.test(item.content)) diags.push(diag(file.path, item.line, "EARS_SHALL", `${item.title} ${problem}`));
       if (item.title.startsWith("REQ-")) {
         const scenarios = scenarioBlocks(shiftHeadings(item.content, -1));
         const found = scenarios.length ? scenarios : headingNodes(item.content).filter((node) => node.title.startsWith("Scenario:"));
@@ -2133,18 +2143,21 @@ function validateClose(root, config, issue, files, docsOnly, quick, diags) {
       if (tokenHits(value, token)) diags.push(diag(rel, 1, "CLOSE_ISSUE_NAME", `Durable docs must not mention ${token}`));
     }
   }
-  const code = git(root, ["ls-files", "-z"]);
-  if (code.status === 0) {
-    for (const rel of code.stdout.split("\0").filter(Boolean)) {
-      if (rel.startsWith(`${config.docsDir}/`)) continue;
-      const abs = path.join(root, rel);
-      if (!fs.existsSync(abs) || fs.statSync(abs).isDirectory()) continue;
-      const text = fs.readFileSync(abs);
-      if (text.includes(0)) continue;
-      if (PROVISIONAL_RE.test(text.toString("utf8"))) diags.push(diag(rel, 1, "CLOSE_PROVISIONAL", "Replace provisional IDs in code before close"));
-      PROVISIONAL_RE.lastIndex = 0;
-    }
+  for (const rel of codePaths(root, config)) {
+    const abs = path.join(root, rel);
+    if (!fs.existsSync(abs) || fs.statSync(abs).isDirectory()) continue;
+    const text = fs.readFileSync(abs);
+    if (text.includes(0)) continue;
+    if (PROVISIONAL_RE.test(text.toString("utf8"))) diags.push(diag(rel, 1, "CLOSE_PROVISIONAL", "Replace provisional IDs in code before close"));
+    PROVISIONAL_RE.lastIndex = 0;
   }
+}
+
+function codePaths(root, config) {
+  const listed = git(root, ["ls-files", "-z"]);
+  if (listed.status !== 0) return [];
+  const skipped = [config.docsDir, ...(config.skillsDir || []).map((dir) => `${dir}/skills`)].map((dir) => `${dir.replace(/\/+$/, "")}/`);
+  return listed.stdout.split("\0").filter((rel) => rel && !skipped.some((prefix) => rel.startsWith(prefix)));
 }
 
 function issueTokens(issue) {
@@ -2161,12 +2174,9 @@ function tokenHits(text, token) {
   return new RegExp(`(^|[^a-z0-9-])${token}([^a-z0-9-]|$)`).test(text);
 }
 
-function loadCodeFiles(root, docsDir) {
+function loadCodeFiles(root, config) {
   const files = new Map();
-  const listed = git(root, ["ls-files", "-z"]);
-  if (listed.status !== 0) return files;
-  for (const rel of listed.stdout.split("\0").filter(Boolean)) {
-    if (rel.startsWith(`${docsDir}/`)) continue;
+  for (const rel of codePaths(root, config)) {
     const abs = path.join(root, rel);
     if (!fs.existsSync(abs) || fs.statSync(abs).isDirectory()) continue;
     const buffer = fs.readFileSync(abs);
@@ -2321,7 +2331,7 @@ function runApply(root, config, opts) {
   const simulated = simulate(tree, config.docsDir, issueResult.deltas, issue, { lang: config.lang || "en", root });
   const diags = [...issueResult.diags, ...simulated.diags];
   if (diags.length) return { code: exitCode(diags), stdout: output(diags, opts.format), stderr: "" };
-  const code = loadCodeFiles(root, config.docsDir);
+  const code = loadCodeFiles(root, config);
   for (const [rel, text] of code) {
     const next = replaceTokens(text, simulated.idMap);
     if (next !== text) fs.writeFileSync(path.join(root, rel), next);
@@ -2352,7 +2362,7 @@ function runRenumber(root, config, opts) {
     if (typeof value !== "string" || rel.startsWith(`${config.docsDir}/issues/`)) continue;
     tree.set(rel, preserveBaseIds(value, gitFile(root, base, rel), idMap));
   }
-  applyRenumberToCode(root, config.docsDir, base, idMap);
+  applyRenumberToCode(root, config, base, idMap);
   recomputeFormer(tree, config.docsDir);
   regenerateIndexes(tree, config.docsDir);
   writeTree(root, before, tree);
@@ -2446,11 +2456,8 @@ function rewriteCode(tree, docsDir, from, to, root, base) {
   }
 }
 
-function applyRenumberToCode(root, docsDir, base, idMap) {
-  const listed = git(root, ["ls-files", "-z"]);
-  if (listed.status !== 0) return;
-  for (const rel of listed.stdout.split("\0").filter(Boolean)) {
-    if (rel.startsWith(`${docsDir}/`)) continue;
+function applyRenumberToCode(root, config, base, idMap) {
+  for (const rel of codePaths(root, config)) {
     const abs = path.join(root, rel);
     if (!fs.existsSync(abs) || fs.statSync(abs).isDirectory()) continue;
     const work = fs.readFileSync(abs);
