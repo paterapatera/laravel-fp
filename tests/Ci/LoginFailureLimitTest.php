@@ -6,7 +6,7 @@ use Illuminate\Support\Facades\Cache;
 
 uses(LazilyRefreshDatabase::class);
 
-test('NFR-DSH-NEW-1 REQ-DSH-NEW-7 直近5回の不一致は正しいパスワードを拒否し、失敗のない別メールはログインできる', function () {
+test('NFR-DSH-1 REQ-DSH-7 直近5回の不一致は正しいパスワードを拒否し、失敗のない別メールはログインできる', function () {
     $blocked = User::factory()->create();
     $open = User::factory()->create();
 

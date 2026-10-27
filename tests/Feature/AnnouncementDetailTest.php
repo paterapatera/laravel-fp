@@ -6,7 +6,7 @@ use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
 
 uses(LazilyRefreshDatabase::class);
 
-test('REQ-ANN-NEW-6 REQ-ANN-NEW-7 REQ-ANN-NEW-8 REQ-ANN-NEW-10 詳細はタイトルと本文だけを出し、公開対象でなければ本文の無い 404 で、作成・編集・削除は無い', function () {
+test('REQ-ANN-6 REQ-ANN-7 REQ-ANN-8 REQ-ANN-10 詳細はタイトルと本文だけを出し、公開対象でなければ本文の無い 404 で、作成・編集・削除は無い', function () {
     $user = User::factory()->create();
     $now = now()->startOfSecond();
     $first = Announcement::factory()->create([
@@ -83,7 +83,7 @@ test('REQ-ANN-NEW-6 REQ-ANN-NEW-7 REQ-ANN-NEW-8 REQ-ANN-NEW-10 詳細はタイ�
     $this->actingAs($user)->get('/announcements/not-a-number')->assertNotFound();
 });
 
-test('REQ-ANN-NEW-9 一覧の二件目を選ぶと二件目の詳細が出る', function () {
+test('REQ-ANN-9 一覧の二件目を選ぶと二件目の詳細が出る', function () {
     $now = now()->startOfSecond();
     $sameStart = $now->copy()->subDay();
 
@@ -118,7 +118,7 @@ test('REQ-ANN-NEW-9 一覧の二件目を選ぶと二件目の詳細が出る', 
         ->assertDontSee('一件目の本文だけ');
 });
 
-test('REQ-DSH-NEW-1 REQ-DSH-NEW-5 REQ-DSH-NEW-9 REQ-DSH-NEW-10 未ログインの詳細はログインへ戻り、成功後にその詳細を示し、詳細からログアウトできる', function () {
+test('REQ-DSH-1 REQ-DSH-5 REQ-DSH-9 REQ-DSH-10 未ログインの詳細はログインへ戻り、成功後にその詳細を示し、詳細からログアウトできる', function () {
     $user = User::factory()->create();
     $announcement = Announcement::factory()->create([
         'title' => '戻る詳細',

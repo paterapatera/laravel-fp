@@ -8,7 +8,7 @@ use Illuminate\Support\Facades\Schema;
 
 uses(LazilyRefreshDatabase::class);
 
-test('DATA-ANN-NEW-1 各項目が保存され updated_at 列は存在しない', function () {
+test('DATA-ANN-1 各項目が保存され updated_at 列は存在しない', function () {
     $publishedStartsAt = now()->subHour()->startOfSecond();
     $publishedEndsAt = now()->addHour()->startOfSecond();
     $draftStartsAt = now()->subDays(2)->startOfSecond();

@@ -7,7 +7,7 @@ use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
 
 uses(LazilyRefreshDatabase::class);
 
-test('REQ-ANN-NEW-1 REQ-ANN-NEW-8 公開対象だけが一覧と一件取得に残り、それ以外は失敗する', function () {
+test('REQ-ANN-1 REQ-ANN-8 公開対象だけが一覧と一件取得に残り、それ以外は失敗する', function () {
     $now = now()->startOfSecond();
     $visible = Announcement::factory()->create([
         'title' => '公開対象',
@@ -46,7 +46,7 @@ test('REQ-ANN-NEW-1 REQ-ANN-NEW-8 公開対象だけが一覧と一件取得に�
         ->and($catalog->findVisible($visible->id + 1000, $now)->isErr())->toBeTrue();
 });
 
-test('REQ-ANN-NEW-2 利用者を変えても公開対象の一覧は同じである', function () {
+test('REQ-ANN-2 利用者を変えても公開対象の一覧は同じである', function () {
     Announcement::factory()->create(['title' => '一件目']);
     Announcement::factory()->create(['title' => '二件目']);
     $catalog = app(AnnouncementCatalog::class);
@@ -62,7 +62,7 @@ test('REQ-ANN-NEW-2 利用者を変えても公開対象の一覧は同じであ
         ->and($second)->toBe($first);
 });
 
-test('REQ-ANN-NEW-4 公開開始、作成、タイトルの順で並ぶ', function () {
+test('REQ-ANN-4 公開開始、作成、タイトルの順で並ぶ', function () {
     $now = now()->startOfSecond();
     $sameStart = $now->copy()->subDay();
 

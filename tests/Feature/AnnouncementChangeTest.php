@@ -7,7 +7,7 @@ use Illuminate\Support\Facades\Route;
 
 uses(LazilyRefreshDatabase::class);
 
-test('REQ-ANN-NEW-11 変更を求めても保存済みのタイトル、要約、本文は変わらない', function () {
+test('REQ-ANN-11 変更を求めても保存済みのタイトル、要約、本文は変わらない', function () {
     $announcement = Announcement::factory()->create([
         'title' => '保存済みタイトル',
         'summary' => '保存済み要約',

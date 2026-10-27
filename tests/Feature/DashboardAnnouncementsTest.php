@@ -6,7 +6,7 @@ use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
 
 uses(LazilyRefreshDatabase::class);
 
-test('REQ-ANN-NEW-1 REQ-ANN-NEW-3 REQ-ANN-NEW-5 REQ-ANN-NEW-10 一覧はタイトルと要約だけを出し、空ならその旨を示し、作成・編集・削除は無い', function () {
+test('REQ-ANN-1 REQ-ANN-3 REQ-ANN-5 REQ-ANN-10 一覧はタイトルと要約だけを出し、空ならその旨を示し、作成・編集・削除は無い', function () {
     $user = User::factory()->create();
     $visible = Announcement::factory()->create([
         'title' => 'Visible <b>title</b>',
@@ -49,7 +49,7 @@ test('REQ-ANN-NEW-1 REQ-ANN-NEW-3 REQ-ANN-NEW-5 REQ-ANN-NEW-10 一覧はタイ�
         ->assertDontSee('残った下書きUNIQUE');
 });
 
-test('REQ-ANN-NEW-2 二人のログイン済み利用者に同じ一覧が出る', function () {
+test('REQ-ANN-2 二人のログイン済み利用者に同じ一覧が出る', function () {
     Announcement::factory()->create(['title' => '共通のお知らせ一']);
     Announcement::factory()->create(['title' => '共通のお知らせ二']);
 
@@ -60,7 +60,7 @@ test('REQ-ANN-NEW-2 二人のログイン済み利用者に同じ一覧が出る
     $second->assertOk()->assertSee('共通のお知らせ一')->assertSee('共通のお知らせ二');
 });
 
-test('REQ-ANN-NEW-4 ダッシュボードは公開開始、作成、タイトルの順に並ぶ', function () {
+test('REQ-ANN-4 ダッシュボードは公開開始、作成、タイトルの順に並ぶ', function () {
     $now = now()->startOfSecond();
     $sameStart = $now->copy()->subDay();
 

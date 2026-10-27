@@ -31,7 +31,7 @@ function loginFailureCacheKey(string $email): string
     return 'login-failures:'.hash('sha256', $email);
 }
 
-test('REQ-DSH-NEW-1 未認証の GET /dashboard はログインに着地し、お知らせの題名・要約・本文を出さない', function () {
+test('REQ-DSH-1 未認証の GET /dashboard はログインに着地し、お知らせの題名・要約・本文を出さない', function () {
     $this->get('/dashboard')->assertRedirect(route('login'));
 
     $this->followingRedirects()
@@ -45,7 +45,7 @@ test('REQ-DSH-NEW-1 未認証の GET /dashboard はログインに着地し、�
         ->assertDontSee('announcement-body');
 });
 
-test('REQ-DSH-NEW-5 一致するログインはダッシュボードへ着地する', function () {
+test('REQ-DSH-5 一致するログインはダッシュボードへ着地する', function () {
     $user = User::factory()->create();
 
     $this->post('/login', [
@@ -56,7 +56,7 @@ test('REQ-DSH-NEW-5 一致するログインはダッシュボードへ着地す
     $this->assertAuthenticatedAs($user);
 });
 
-test('REQ-DSH-NEW-5 未認証で /dashboard を訪れたあとのログインは intended のダッシュボードへ着地する', function () {
+test('REQ-DSH-5 未認証で /dashboard を訪れたあとのログインは intended のダッシュボードへ着地する', function () {
     $user = User::factory()->create();
 
     $this->get('/dashboard')->assertRedirect(route('login'));
@@ -69,7 +69,7 @@ test('REQ-DSH-NEW-5 未認証で /dashboard を訪れたあとのログインは
     $this->assertAuthenticatedAs($user);
 });
 
-test('REQ-DSH-NEW-5 不一致のあとの一致するログインはダッシュボードへ着地する', function () {
+test('REQ-DSH-5 不一致のあとの一致するログインはダッシュボードへ着地する', function () {
     $user = User::factory()->create();
 
     $this->post('/login', [
@@ -87,7 +87,7 @@ test('REQ-DSH-NEW-5 不一致のあとの一致するログインはダッシュ
     $this->assertAuthenticatedAs($user);
 });
 
-test('REQ-DSH-NEW-5 60秒より古い失敗時刻が5件あっても正しいログインはダッシュボードへ着地する', function () {
+test('REQ-DSH-5 60秒より古い失敗時刻が5件あっても正しいログインはダッシュボードへ着地する', function () {
     $user = User::factory()->create();
     $expired = now()->subSeconds(61)->getTimestamp();
 
@@ -101,7 +101,7 @@ test('REQ-DSH-NEW-5 60秒より古い失敗時刻が5件あっても正しいロ
     $this->assertAuthenticatedAs($user);
 });
 
-test('REQ-DSH-NEW-6 未知のメールアドレスと誤ったパスワードは同じ拒否文を出し、認証しない', function () {
+test('REQ-DSH-6 未知のメールアドレスと誤ったパスワードは同じ拒否文を出し、認証しない', function () {
     $user = User::factory()->create();
 
     $unknown = $this->post('/login', [
@@ -145,7 +145,7 @@ test('REQ-DSH-NEW-6 未知のメールアドレスと誤ったパスワードは
     }
 });
 
-test('REQ-DSH-NEW-8 認証済みの GET /login はダッシュボードへリダイレクトする', function () {
+test('REQ-DSH-8 認証済みの GET /login はダッシュボードへリダイレクトする', function () {
     $user = User::factory()->create();
 
     $this->actingAs($user)
@@ -153,7 +153,7 @@ test('REQ-DSH-NEW-8 認証済みの GET /login はダッシュボードへリダ
         ->assertRedirect(route('dashboard'));
 });
 
-test('REQ-DSH-NEW-9 ダッシュボード、ウェルカム、未認証のログアウトは未認証のウェルカムへ戻り、誰も認証しない', function () {
+test('REQ-DSH-9 ダッシュボード、ウェルカム、未認証のログアウトは未認証のウェルカムへ戻り、誰も認証しない', function () {
     $user = User::factory()->create();
 
     $this->actingAs($user)
@@ -190,7 +190,7 @@ test('REQ-DSH-NEW-9 ダッシュボード、ウェルカム、未認証のログ
     expect(auth()->id())->toBeNull();
 });
 
-test('REQ-DSH-NEW-10 認証済みのウェルカムとダッシュボードはログアウトを表示する', function () {
+test('REQ-DSH-10 認証済みのウェルカムとダッシュボードはログアウトを表示する', function () {
     $user = User::factory()->create();
 
     $this->actingAs($user)
@@ -206,14 +206,14 @@ test('REQ-DSH-NEW-10 認証済みのウェルカムとダッシュボードは�
         ->assertSee('action="'.route('logout').'"', false);
 });
 
-test('REQ-DSH-NEW-2 未認証のウェルカムはログインへのリンクを持つ', function () {
+test('REQ-DSH-2 未認証のウェルカムはログインへのリンクを持つ', function () {
     $this->get('/')
         ->assertOk()
         ->assertSee('href="'.route('login').'"', false)
         ->assertSee('ログイン');
 });
 
-test('REQ-DSH-NEW-4 認証済みのウェルカムはダッシュボードへのリンクを持つ', function () {
+test('REQ-DSH-4 認証済みのウェルカムはダッシュボードへのリンクを持つ', function () {
     $user = User::factory()->create();
 
     $this->actingAs($user)
@@ -223,7 +223,7 @@ test('REQ-DSH-NEW-4 認証済みのウェルカムはダッシュボードへの
         ->assertSee('ダッシュボード');
 });
 
-test('REQ-DSH-NEW-3 ウェルカムは未認証でも認証済みでもお知らせの区画を出さない', function () {
+test('REQ-DSH-3 ウェルカムは未認証でも認証済みでもお知らせの区画を出さない', function () {
     $user = User::factory()->create();
 
     $guest = $this->get('/')->assertOk();
@@ -243,7 +243,7 @@ test('REQ-DSH-NEW-3 ウェルカムは未認証でも認証済みでもお知ら
     }
 });
 
-test('REQ-DSH-NEW-11 ウェルカムとログインに自己登録の操作がない', function () {
+test('REQ-DSH-11 ウェルカムとログインに自己登録の操作がない', function () {
     foreach (['/', '/login'] as $path) {
         $response = $this->get($path)->assertOk();
 
@@ -254,7 +254,7 @@ test('REQ-DSH-NEW-11 ウェルカムとログインに自己登録の操作が�
     }
 });
 
-test('REQ-DSH-NEW-13 ウェルカムとログインにパスワード再設定の操作がない', function () {
+test('REQ-DSH-13 ウェルカムとログインにパスワード再設定の操作がない', function () {
     foreach (['/', '/login'] as $path) {
         $this->get($path)
             ->assertOk()
@@ -267,7 +267,7 @@ test('REQ-DSH-NEW-13 ウェルカムとログインにパスワード再設定�
     }
 });
 
-test('REQ-DSH-NEW-12 POST /register 相当は利用者を作らず、そのメールではログインできない', function () {
+test('REQ-DSH-12 POST /register 相当は利用者を作らず、そのメールではログインできない', function () {
     User::factory()->create();
 
     expect(User::query()->count())->toBe(1);
@@ -298,7 +298,7 @@ test('REQ-DSH-NEW-12 POST /register 相当は利用者を作らず、そのメ�
     $this->assertGuest();
 });
 
-test('REQ-DSH-NEW-14 パスワード再設定の直接要求は保存済みパスワードを変えず、以前のパスワードでログインできる', function () {
+test('REQ-DSH-14 パスワード再設定の直接要求は保存済みパスワードを変えず、以前のパスワードでログインできる', function () {
     $user = User::factory()->create();
     $storedPassword = $user->password;
 
@@ -334,7 +334,7 @@ test('REQ-DSH-NEW-14 パスワード再設定の直接要求は保存済みパ�
     $this->assertAuthenticatedAs($user);
 });
 
-test('REQ-DSH-NEW-7 直近の不一致が5件あるメールは正しいパスワードでも拒否され、失敗のない別利用者はログインできる', function () {
+test('REQ-DSH-7 直近の不一致が5件あるメールは正しいパスワードでも拒否され、失敗のない別利用者はログインできる', function () {
     $blocked = User::factory()->create();
     $open = User::factory()->create();
 

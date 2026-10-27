@@ -25,7 +25,7 @@ function visibleAt(
     return (new AnnouncementVisibility)->isVisible($status, $title, $summary, $body, $startsAt, $endsAt, $now);
 }
 
-test('REQ-ANN-NEW-1 REQ-ANN-NEW-8 開始の瞬間と終了の瞬間は公開対象である', function () {
+test('REQ-ANN-1 REQ-ANN-8 開始の瞬間と終了の瞬間は公開対象である', function () {
     $start = new DateTimeImmutable('2026-06-01 12:00:00 UTC');
     $end = new DateTimeImmutable('2026-06-02 12:00:00 UTC');
 
@@ -33,7 +33,7 @@ test('REQ-ANN-NEW-1 REQ-ANN-NEW-8 開始の瞬間と終了の瞬間は公開対�
         ->and(visibleAt(startsAt: $start, endsAt: $end, now: $end))->toBeTrue();
 });
 
-test('REQ-ANN-NEW-1 REQ-ANN-NEW-8 下書き、期間外、空の時刻、空白だけの項目は公開対象でない', function () {
+test('REQ-ANN-1 REQ-ANN-8 下書き、期間外、空の時刻、空白だけの項目は公開対象でない', function () {
     $now = new DateTimeImmutable('2026-06-01 12:00:00 UTC');
     $start = new DateTimeImmutable('2026-06-01 00:00:00 UTC');
     $end = new DateTimeImmutable('2026-06-02 00:00:00 UTC');

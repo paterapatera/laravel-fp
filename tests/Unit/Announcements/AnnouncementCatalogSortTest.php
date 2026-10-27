@@ -3,7 +3,7 @@
 use App\Announcements\AnnouncementCatalog;
 use App\Announcements\AnnouncementVisibility;
 
-test('REQ-ANN-NEW-4 開始と作成が同じときタイトルは strcmp の昇順になる', function () {
+test('REQ-ANN-4 開始と作成が同じときタイトルは strcmp の昇順になる', function () {
     $catalog = new AnnouncementCatalog(new AnnouncementVisibility);
     $instant = new DateTimeImmutable('2026-06-01 12:00:00 UTC');
 
