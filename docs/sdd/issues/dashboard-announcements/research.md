@@ -100,6 +100,7 @@
 ### ADR-NEW-1: ログインは自前のセッション画面にする
 - description: 用意された利用者のログインは、追加パッケージのないセッション画面で行う。
 - tags: [dashboard]
+- slug: login-session
 
 #### Context and Problem Statement
 
