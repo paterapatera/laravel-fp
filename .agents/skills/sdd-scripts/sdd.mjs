@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-const PACKAGE_VERSION = "0.3.7";
+const PACKAGE_VERSION = "0.3.10";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
@@ -54,6 +54,17 @@ function normalizeForHash(text) {
   const min = levels.length ? Math.min(...levels) : 1;
   value = value.replace(/^(#{1,6}) /gm, (_, marks) => `${"#".repeat(marks.length - min + 1)} `);
   return value;
+}
+
+function sameAfterApply(current, next) {
+  const left = normalizeForHash(current);
+  const right = normalizeForHash(next);
+  if (left === right) return true;
+  if (!/-NEW-\d+\b/.test(right)) return false;
+  const pattern = right
+    .replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+    .replace(/\b((?:REQ|IF|DATA|NFR)-[A-Z]{2,6}|ADR)-NEW-\d+\b/g, "$1-\\d+");
+  return new RegExp(`^${pattern}$`).test(left);
 }
 
 function baseHash(text) {
@@ -148,7 +159,7 @@ function stripCodeFences(text) {
   return text.replace(/```[\s\S]*?```/g, "");
 }
 
-const META_KEYS = new Set(["base", "change", "reason", "after", "rationale", "title", "description", "tags", "code", "compatibility"]);
+const META_KEYS = new Set(["base", "change", "reason", "after", "rationale", "title", "description", "tags", "code", "compatibility", "slug"]);
 
 function parseMeta(block) {
   const lines = block.replace(/\r\n/g, "\n").split("\n");
@@ -519,6 +530,7 @@ function adrRecords(nodes, index) {
       title: match[2].trim(),
       description: parsed.meta.description || "",
       tags: parseListValue(parsed.meta.tags || ""),
+      slug: parsed.meta.slug || "",
       sections,
       line: node.line,
     });
@@ -1270,7 +1282,7 @@ function baseDecision(current, base, next) {
   const currentHash = current == null ? "" : baseHash(current);
   const nextHash = next == null ? "" : baseHash(next);
   if (current == null) return { status: "missing" };
-  if (normalizeForHash(current) === normalizeForHash(next || "")) return { status: "applied", current, next };
+  if (sameAfterApply(current, next || "")) return { status: "applied", current, next };
   if (!base) return { status: "missing-base", current, next };
   if (currentHash === base) return { status: "ready", current, next };
   return { status: "mismatch", current, next };
@@ -1343,7 +1355,7 @@ function applySpecFile(map, docsDir, file, diags, logs, idMap, reserved) {
   for (const item of file.added) {
     const provisional = item.title.split(":")[0].trim();
     const name = item.title.includes(":") ? item.title.slice(item.title.indexOf(":") + 1).trim() : "";
-    const already = headingNodes(parsed.body).find((node) => node.level === 3 && normalizeForHash(node.full) === normalizeForHash(shiftHeadings(item.content.trim(), -1)));
+    const already = headingNodes(parsed.body).find((node) => node.level === 3 && sameAfterApply(node.full, shiftHeadings(item.content.trim(), -1)));
     if (already) {
       idMap.set(provisional, already.title.split(":")[0].trim());
       continue;
@@ -1467,6 +1479,10 @@ function findAdr(map, docsDir, id) {
 
 function applyAdrs(map, docsDir, delta, diags, logs, idMap) {
   for (const adr of delta.adrs) {
+    if (adr.slug && !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(adr.slug)) {
+      diags.push(diag("research.md", adr.line, "ADR_SLUG", `${adr.id} slug must be lowercase ASCII letters and digits joined by hyphens`));
+      continue;
+    }
     const existingRel = [...map.keys()].find((rel) => rel.startsWith(`${docsDir}/decision/`) && rel.endsWith(".md") && bodyOf(map, rel)?.data?.title === adr.title);
     if (existingRel) {
       const heading = /^# (ADR-\d+):/m.exec(bodyOf(map, existingRel).body);
@@ -1476,7 +1492,7 @@ function applyAdrs(map, docsDir, delta, diags, logs, idMap) {
     const number = nextAdr(map, docsDir);
     const id = `ADR-${number}`;
     idMap.set(adr.id, id);
-    const slug = kebab(adr.title) || `adr-${number}`;
+    const slug = adr.slug || kebab(adr.title) || `adr-${number}`;
     let body = `# ${id}: ${adr.title}\n\n## Status\nAccepted\nDate: ${localDate()}\n\n`;
     for (const section of adr.sections) {
       if (section.title === "Status") continue;
@@ -1560,7 +1576,7 @@ function applyNewSteering(map, docsDir, delta, diags, logs, idMap) {
       continue;
     }
     if (!item.reason) diags.push(diag(item.path, item.line, "STRUCTURE", "Removed steering requires a reason"));
-    map.delete(docsRel(docsDir, item.path));
+    if (!map.delete(docsRel(docsDir, item.path))) continue;
     logs.push({ area: "steering", action: "Removed", text: `${item.path} - ${item.reason}` });
   }
   for (const item of delta.newSteering) {
@@ -1570,7 +1586,9 @@ function applyNewSteering(map, docsDir, delta, diags, logs, idMap) {
       const rationale = rationaleLine(map, docsDir, section.rationale, idMap);
       body = replaceH2(body, section.title, `${shiftHeadings(section.content, -2)}${rationale}`);
     }
-    map.set(rel, joinDoc({ type: "Steering", title: item.title, description: item.description, tags: item.tags }, body));
+    const doc = joinDoc({ type: "Steering", title: item.title, description: item.description, tags: item.tags }, body);
+    if (typeof map.get(rel) === "string" && sameAfterApply(map.get(rel), doc)) continue;
+    map.set(rel, doc);
     logs.push({ area: "steering", action: "Added", text: item.path });
   }
 }

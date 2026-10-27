@@ -60,7 +60,7 @@
     - Requirements: REQ-ANN-NEW-11
   - 6.2 変更を求めても保存済みのタイトル、要約、本文が変わらないことの結合テストを追加する
     - Requirements: REQ-ANN-NEW-11
-- [ ] 7. Manual verification
+- [x] 7. Manual verification
   - Depends on: 6
   - 7.1 シードした利用者でウェルカムからログインし、公開対象のタイトルと要約が見え、下書きが見えず、ウェルカムにダッシュボードへのリンクがあることを確認する
     - Requirements: REQ-DSH-NEW-2, REQ-DSH-NEW-4, REQ-DSH-NEW-5, REQ-ANN-NEW-1
