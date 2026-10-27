@@ -12,12 +12,13 @@
 - REQ-ANN-10 は一覧と詳細に作成、編集、削除の操作を出さない。
 - REQ-ANN-11 はお知らせの変更と削除を拒否する。
 - DATA-ANN-1 は題名、要約、本文、状態、開始、終了、作成時刻を持つ。
+- `database/migrations/0001_01_01_000000_create_users_table.php:14` の利用者は名前、メール、パスワードを持ち、管理者フラグは無い。
 - REQ-DSH-1 は未ログインの訪問者がダッシュボードまたは詳細を開くとログインを示す。
 - [お知らせの閲覧](/specs/announcements/read/) の Scope は、管理画面での作成と編集をその能力の範囲外としている。
 
 ## Proposal Coverage
 
-- 管理者権限のある利用者は、お知らせを下書きとして一件追加できる。: REQ-ANN-10, REQ-ANR-NEW-1, REQ-ANR-NEW-3, REQ-ANR-NEW-4, REQ-ANR-NEW-11, REQ-ANR-NEW-12, REQ-ANR-NEW-13, REQ-ANR-NEW-14, REQ-ANR-NEW-15, REQ-ANR-NEW-16, REQ-ANR-NEW-17, REQ-ANR-NEW-18
+- 管理者権限のある利用者は、お知らせを下書きとして一件追加できる。: REQ-ANN-10, REQ-ANR-NEW-1, REQ-ANR-NEW-3, REQ-ANR-NEW-4, REQ-ANR-NEW-11, REQ-ANR-NEW-12, REQ-ANR-NEW-13, REQ-ANR-NEW-14, REQ-ANR-NEW-15, REQ-ANR-NEW-16, REQ-ANR-NEW-17, REQ-ANR-NEW-18, REQ-ANR-NEW-19, DATA-ANR-NEW-1
 - 管理者権限の無い利用者は、お知らせを追加できない。: REQ-ANR-NEW-2, REQ-ANR-NEW-5, REQ-ANR-NEW-6, REQ-ANR-NEW-7, REQ-ANR-NEW-8, REQ-ANR-NEW-9, REQ-ANR-NEW-10
 
 ## Assumptions
@@ -88,6 +89,11 @@
   - [5] ダッシュボードだけ (chosen)
   - [4] ダッシュボードと詳細
   Answer: REQ-ANN-10, REQ-ANR-NEW-1, REQ-ANR-NEW-2, REQ-ANR-NEW-3
+- [x] Q15: 管理者であることはどこに記録されるか
+  - [5] 利用者に管理者フラグが付く (chosen)
+  - [4] 設定にあるメールだけが管理者
+  - [2] 役割パッケージの役割で管理者になる
+  Answer: DATA-ANR-NEW-1, glossary 管理者
 
 # Delta
 
@@ -96,7 +102,7 @@
 | capability | spec.md | interfaces.md | data.md | quality.md |
 |---|---|---|---|---|
 | /specs/announcements/read | changed | no change: 境界の契約は変わらない | no change: 保存項目は変わらない | no change: 数値目標は変わらない |
-| /specs/announcements/register | changed | no change: 他能力が呼ぶ契約は増えない | no change: 保存項目は DATA-ANN-1 のまま | no change: 数値目標は置かない |
+| /specs/announcements/register | changed | no change: 他能力が呼ぶ契約は増えない | changed | no change: 数値目標は置かない |
 
 ## New capability: /specs/announcements/register
 
@@ -127,6 +133,32 @@
 - **もし** その詳細を開く
 - **ならば** 編集と削除の操作は無い
 
+## /specs/announcements/register/data.md
+
+### METADATA
+
+- title: 利用者の管理者フラグ
+- description: お知らせを登録できる利用者を区別する保存項目。
+- tags: [announcements]
+
+### SECTIONS
+
+#### Purpose
+
+登録できる利用者を、利用者に付く管理者フラグで区別して保つ。
+
+### ADDED
+
+#### DATA-ANR-NEW-1: User admin flag
+- Classification: Internal
+- Retention: 利用者がある間
+
+システムは各利用者の管理者フラグを永続化しなければならない。
+
+| Element | Type | Required | Constraints | Description |
+|---|---|---|---|---|
+| admin | boolean | yes | 利用者ごとに一つ。付いていない利用者は管理者ではない | 管理者であるか |
+
 ## /specs/announcements/register/spec.md
 
 ### SECTIONS
@@ -137,7 +169,7 @@
 
 #### Scope
 
-登録の入口、下書きの追加、空白だけの入力の拒否、成功した結果の再送。保存済みのお知らせの編集と削除、管理者権限の付与、公開期間の保存は範囲外である。一覧と詳細は [お知らせの閲覧](/specs/announcements/read/) に属する。
+登録の入口、下書きの追加、空白だけの入力の拒否、成功した結果の再送。保存済みのお知らせの編集と削除、管理者権限の付与、管理者フラグの表示、公開期間の保存は範囲外である。一覧と詳細は [お知らせの閲覧](/specs/announcements/read/) に属する。お知らせの保存項目は [お知らせの記録](/specs/announcements/read/data.md) に属する。
 
 #### Definitions
 
@@ -426,6 +458,34 @@
 - **もし** その成功の結果を再送する
 - **ならば** その題名の下書きは一件のままである
 
+#### REQ-ANR-NEW-19: Keep the admin flag
+
+ログイン済みの利用者が登録を求めた場合、システムはその利用者の管理者フラグを変えないままにしなければならない。
+
+##### Scenario: Registration keeps an admin flag
+
+- **前提** 管理者フラグが付いた利用者と、空白以外の題名、要約、本文
+- **もし** 登録を求める
+- **ならば** その利用者の管理者フラグは付いたままである
+
+##### Scenario: Registration keeps a non-admin flag
+
+- **前提** 管理者フラグが付いていないログイン済みの利用者と、空白以外の題名、要約、本文
+- **もし** 登録を求める
+- **ならば** その利用者の管理者フラグは付いていないままである
+
+##### Scenario: Submitted flag does not grant admin
+
+- **前提** 管理者フラグが付いていないログイン済みの利用者
+- **もし** 管理者フラグを付ける入力を含めて登録を求める
+- **ならば** その利用者の管理者フラグは付いていないままである
+
+##### Scenario: Submitted flag does not remove admin
+
+- **前提** 管理者フラグが付いた利用者と、空白以外の題名、要約、本文
+- **もし** 管理者フラグを外す入力を含めて登録を求める
+- **ならば** その利用者の管理者フラグは付いたままである
+
 ## /steering/product.md
 
 ### SECTIONS
@@ -459,4 +519,4 @@
 
 #### 管理者
 
-お知らせの下書きを登録する権限を持つ利用者。
+管理者フラグが付いた利用者。
