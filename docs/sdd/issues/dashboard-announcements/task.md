@@ -1,13 +1,13 @@
 # Tasks
 
-- [ ] 1. お知らせを保存する (P)
+- [x] 1. お知らせを保存する (P)
   - 1.1 announcements のマイグレーション、AnnouncementStatus、Announcement モデルを追加する
     - Requirements: DATA-ANN-NEW-1
   - 1.2 既定が公開対象になる Factory と、公開対象一件と下書き一件を作る Seeder を追加する
     - Requirements: DATA-ANN-NEW-1
   - 1.3 各項目が保存され updated_at が無いことの結合テストを追加する
     - Requirements: DATA-ANN-NEW-1
-- [ ] 2. 公開対象を判定して取得する
+- [x] 2. 公開対象を判定して取得する
   - Depends on: 1
   - 2.1 AnnouncementVisibility で状態、非空白の三項目、開始以上かつ終了以下を判定する
     - Requirements: REQ-ANN-NEW-1, REQ-ANN-NEW-8
@@ -19,7 +19,7 @@
     - Requirements: REQ-ANN-NEW-4
   - 2.5 絞り込み、利用者によらない同じ一覧、並び、公開対象でない一件の結合テストを追加する
     - Requirements: REQ-ANN-NEW-1, REQ-ANN-NEW-2, REQ-ANN-NEW-4, REQ-ANN-NEW-8
-- [ ] 3. ログインしてセッションを始める (P)
+- [x] 3. ログインしてセッションを始める (P)
   - 3.1 直近60秒の失敗時刻で認証する LoginAttempt を追加する
     - Requirements: REQ-DSH-NEW-6, REQ-DSH-NEW-7, NFR-DSH-NEW-1
   - 3.2 ログイン画面、セッションの開始と破棄、認証済みの着地 dashboard を追加し、お知らせは取得せず、自己登録とパスワード再設定のルートは置かない
@@ -32,7 +32,7 @@
     - Requirements: REQ-DSH-NEW-7
   - 3.6 同じ上限の CI セキュリティテストを書く
     - Requirements: NFR-DSH-NEW-1, REQ-DSH-NEW-7
-- [ ] 4. ダッシュボードに公開対象を一覧する
+- [x] 4. ダッシュボードに公開対象を一覧する
   - Depends on: 2, 3
   - 4.1 タイトルと要約だけを平文で出し、公開対象が無ければその旨を示すダッシュボードを追加する
     - Requirements: REQ-ANN-NEW-1, REQ-ANN-NEW-3, REQ-ANN-NEW-5, REQ-ANN-NEW-10
@@ -42,7 +42,7 @@
     - Requirements: REQ-ANN-NEW-2
   - 4.4 公開開始、作成、タイトルの順に並ぶことの結合テストを追加する
     - Requirements: REQ-ANN-NEW-4
-- [ ] 5. 選んだお知らせの詳細を示す
+- [x] 5. 選んだお知らせの詳細を示す
   - Depends on: 4
   - 5.1 公開対象のタイトルと本文だけを平文で出し、それ以外は本文の無い 404 にする
     - Requirements: REQ-ANN-NEW-6, REQ-ANN-NEW-7, REQ-ANN-NEW-8, REQ-ANN-NEW-10
@@ -54,7 +54,7 @@
     - Requirements: REQ-ANN-NEW-9
   - 5.5 未ログインの詳細はログインへ戻り、成功後にその詳細を示し、詳細からログアウトできることの結合テストを追加する
     - Requirements: REQ-DSH-NEW-1, REQ-DSH-NEW-5, REQ-DSH-NEW-9, REQ-DSH-NEW-10
-- [ ] 6. お知らせの変更を拒否する
+- [x] 6. お知らせの変更を拒否する
   - Depends on: 5
   - 6.1 お知らせの変更と削除のルートを置かない
     - Requirements: REQ-ANN-NEW-11
