@@ -36,20 +36,19 @@ Composer の PSR-4 は `App\` が `app/`、`Database\Factories\` が `database/f
 | `App\Support` | `Result` と `ResultUnwrapException` |
 | `App\Enums` | `AnnouncementStatus` |
 | `App\Models` | `User` と `Announcement` |
-| `App\Announcements` | 公開判定と `AnnouncementCatalog` |
+| `App\Announcements` | 公開判定、`AnnouncementCatalog`、下書きの登録 |
 | `App\Dashboard` | `LoginAttempt` |
-| `App\Http\Controllers` | ログイン、ダッシュボード、お知らせ詳細 |
+| `App\Http\Controllers` | ログイン、ダッシュボード、お知らせ詳細、お知らせの登録 |
 | `App\Providers` | 空の `AppServiceProvider` |
 
-ウェルカムはクロージャが `welcome` ビューを返す。ログイン、ダッシュボード、お知らせ詳細はコントローラが返す。`resources/js/app.js` は空である。スタイルのエントリは `resources/css/app.css` である。
+ウェルカムはクロージャが `welcome` ビューを返す。ログイン、ダッシュボード、お知らせ詳細、お知らせの登録はコントローラが返す。`resources/js/app.js` は空である。スタイルのエントリは `resources/css/app.css` である。
 
 ## Naming Conventions
-
 - クラスとファイル名は PascalCase で一致させる。
 - メソッドと関数は camelCase にする。真偽を返す名前は `isOk` のように述語にする。
 - PHPUnit のテストメソッドは `test_` と snake_case である。Pest の説明文は日本語である。
 - ルート名を付けるときはドット区切りにし、URL 生成は `route()` を使う。
-- ビュー名はドット区切りである。現在の画面は `welcome` である。
+- ビュー名はドット区切りである。現在の画面は `welcome`、`auth.login`、`dashboard.index`、`announcements.show`、`announcements.register`、`announcements.registered` である。
 - 設定キーは Laravel のファイル名とドット記法に従う。
 
 ## Dependency Rules
@@ -71,8 +70,9 @@ Composer の PSR-4 は `App\` が `app/`、`Database\Factories\` が `database/f
 | コード | 仕様上の置き場 |
 | --- | --- |
 | `routes/web.php`、`resources/views/welcome.blade.php`、`app/Http/Controllers/LoginController.php`、`app/Dashboard/LoginAttempt.php`、`resources/views/auth/login.blade.php` | [ダッシュボードへのアクセス](/specs/dashboard/access/) |
-| `app/Http/Controllers/DashboardController.php`、`resources/views/dashboard/index.blade.php` | [ダッシュボードへのアクセス](/specs/dashboard/access/) と [お知らせの閲覧](/specs/announcements/read/) |
-| `app/Announcements/`、`app/Http/Controllers/AnnouncementController.php`、`app/Models/Announcement.php`、`app/Enums/AnnouncementStatus.php`、`resources/views/announcements/show.blade.php`、お知らせのマイグレーション | [お知らせの閲覧](/specs/announcements/read/) |
+| `app/Http/Controllers/DashboardController.php`、`resources/views/dashboard/index.blade.php` | [ダッシュボードへのアクセス](/specs/dashboard/access/) と [お知らせの閲覧](/specs/announcements/read/) と [お知らせの登録](/specs/announcements/register/) |
+| `app/Announcements/AnnouncementVisibility.php`、`app/Announcements/AnnouncementCatalog.php`、`app/Http/Controllers/AnnouncementController.php`、`app/Models/Announcement.php`、`app/Enums/AnnouncementStatus.php`、`resources/views/announcements/show.blade.php`、お知らせのマイグレーション | [お知らせの閲覧](/specs/announcements/read/) |
+| `app/Announcements/AnnouncementRegistrar.php`、`app/Http/Controllers/AnnouncementRegistrationController.php`、`resources/views/announcements/register.blade.php`、`resources/views/announcements/registered.blade.php`、`app/Models/User.php` の `admin` と、その列を追加するマイグレーション | [お知らせの登録](/specs/announcements/register/) |
 | `/up` | ヘルスチェック。能力仕様は無い |
 | `app/Models/User.php`、利用者・セッション・パスワード再設定のマイグレーション | アカウントの能力仕様 |
 | `app/Support/Result.php`、`app/Support/Exceptions/ResultUnwrapException.php`、`app/Contracts/LogEntry.php` | 結果の能力仕様 |

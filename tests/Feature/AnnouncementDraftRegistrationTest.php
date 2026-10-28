@@ -8,7 +8,7 @@ use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
 
 uses(LazilyRefreshDatabase::class);
 
-test('REQ-ANR-NEW-14 REQ-ANR-NEW-15 下書きを一件追加し、期間は空で、一覧には題名が出ない', function () {
+test('REQ-ANR-14 REQ-ANR-15 下書きを一件追加し、期間は空で、一覧には題名が出ない', function () {
     $title = '  下書き題名UNIQUE  ';
     $summary = '  要約 <b>注意</b>  ';
     $body = " 本文\n";
@@ -31,7 +31,7 @@ test('REQ-ANR-NEW-14 REQ-ANR-NEW-15 下書きを一件追加し、期間は空�
         ->assertDontSee($title);
 });
 
-test('REQ-ANR-NEW-14 二回登録すると下書きがもう一件増える', function () {
+test('REQ-ANR-14 二回登録すると下書きがもう一件増える', function () {
     $registrar = new AnnouncementRegistrar;
 
     $registrar->register('一つ目の題', '一つ目の要約', '一つ目の本文');

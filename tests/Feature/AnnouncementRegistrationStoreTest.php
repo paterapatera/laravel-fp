@@ -7,7 +7,7 @@ use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
 
 uses(LazilyRefreshDatabase::class);
 
-test('REQ-ANR-NEW-12 REQ-ANR-NEW-13 空白の項目だけを示し、入力した文字を残して保存しない', function () {
+test('REQ-ANR-12 REQ-ANR-13 空白の項目だけを示し、入力した文字を残して保存しない', function () {
     $admin = User::factory()->create(['admin' => true]);
 
     $this->actingAs($admin)->post(route('announcements.register.store'), [
@@ -55,7 +55,7 @@ test('REQ-ANR-NEW-12 REQ-ANR-NEW-13 空白の項目だけを示し、入力し�
     expect(Announcement::query()->count())->toBe(0);
 });
 
-test('REQ-ANR-NEW-3 REQ-ANR-NEW-14 REQ-ANR-NEW-15 REQ-ANR-NEW-16 REQ-ANR-NEW-17 REQ-ANR-NEW-19 成功すると題名だけを文字で出し、下書きは期間なしで一件増える', function () {
+test('REQ-ANR-3 REQ-ANR-14 REQ-ANR-15 REQ-ANR-16 REQ-ANR-17 REQ-ANR-19 成功すると題名だけを文字で出し、下書きは期間なしで一件増える', function () {
     $admin = User::factory()->create(['admin' => true]);
     $title = '  <b>注意</b>  ';
 
@@ -97,7 +97,7 @@ test('REQ-ANR-NEW-3 REQ-ANR-NEW-14 REQ-ANR-NEW-15 REQ-ANR-NEW-16 REQ-ANR-NEW-17 
         ->assertDontSee($title, false);
 });
 
-test('REQ-ANR-NEW-14 空の要約を補うと下書きが一件増え、別の登録はもう一件増える', function () {
+test('REQ-ANR-14 空の要約を補うと下書きが一件増え、別の登録はもう一件増える', function () {
     $admin = User::factory()->create(['admin' => true]);
 
     $this->actingAs($admin)->post(route('announcements.register.store'), [
@@ -125,7 +125,7 @@ test('REQ-ANR-NEW-14 空の要約を補うと下書きが一件増え、別の�
     expect(Announcement::query()->where('status', AnnouncementStatus::Draft)->count())->toBe(2);
 });
 
-test('REQ-ANR-NEW-6 REQ-ANR-NEW-8 REQ-ANR-NEW-10 REQ-ANR-NEW-19 管理者以外の登録はお知らせを増やさず、送られた管理者フラグでも admin は変わらない', function () {
+test('REQ-ANR-6 REQ-ANR-8 REQ-ANR-10 REQ-ANR-19 管理者以外の登録はお知らせを増やさず、送られた管理者フラグでも admin は変わらない', function () {
     Announcement::factory()->create();
     $plain = User::factory()->create();
 
@@ -156,7 +156,7 @@ test('REQ-ANR-NEW-6 REQ-ANR-NEW-8 REQ-ANR-NEW-10 REQ-ANR-NEW-19 管理者以外�
         ->and($plain->refresh()->admin)->toBeFalse();
 });
 
-test('REQ-ANR-NEW-18 成功画面を再表示しても、その題名の下書きは一件のままである', function () {
+test('REQ-ANR-18 成功画面を再表示しても、その題名の下書きは一件のままである', function () {
     $admin = User::factory()->create(['admin' => true]);
 
     $this->actingAs($admin)->post(route('announcements.register.store'), [

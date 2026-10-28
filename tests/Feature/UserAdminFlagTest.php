@@ -6,7 +6,7 @@ use Illuminate\Support\Facades\DB;
 
 uses(LazilyRefreshDatabase::class);
 
-test('DATA-ANR-NEW-1 管理者フラグは指定時に保存され未指定時は false になり fill では変わらない', function () {
+test('DATA-ANR-1 管理者フラグは指定時に保存され未指定時は false になり fill では変わらない', function () {
     $admin = User::factory()->create(['admin' => true]);
     $plain = User::factory()->create();
 

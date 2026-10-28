@@ -7,7 +7,7 @@ use Tests\TestCase;
 
 uses(TestCase::class, LazilyRefreshDatabase::class);
 
-test('REQ-ANR-NEW-11 空白だけの題名・要約・本文は保存しない', function () {
+test('REQ-ANR-11 空白だけの題名・要約・本文は保存しない', function () {
     $registrar = new AnnouncementRegistrar;
     $blanks = ['', ' ', " \n\t", "\u{3000}", "\u{00A0}"];
 
@@ -31,7 +31,7 @@ test('REQ-ANR-NEW-11 空白だけの題名・要約・本文は保存しない',
         ->and(Announcement::query()->count())->toBe(0);
 });
 
-test('REQ-ANR-NEW-11 空白以外の文字は前後の空白もマークアップもそのまま保存する', function () {
+test('REQ-ANR-11 空白以外の文字は前後の空白もマークアップもそのまま保存する', function () {
     $title = '  あ  ';
     $summary = '<b>注意</b>';
     $body = " \t本文\n";

@@ -24,11 +24,11 @@ tags: [architecture]
 ## Component View
 ### HTTP
 
-`public/index.php` から `bootstrap/app.php` へ入る。Web ルートは `routes/web.php`、コマンドは `routes/console.php`、ヘルスチェックは `/up` である。ウェルカムはクロージャがビューを返す。ログインとログアウトは `LoginController`、ダッシュボードは `DashboardController`、お知らせ詳細は `AnnouncementController` である。未認証の保護画面は `auth` が名前付きルート `login` へ戻す。`api/*` の例外だけ JSON で描画する。
+`public/index.php` から `bootstrap/app.php` へ入る。Web ルートは `routes/web.php`、コマンドは `routes/console.php`、ヘルスチェックは `/up` である。ウェルカムはクロージャがビューを返す。ログインとログアウトは `LoginController`、ダッシュボードは `DashboardController`、お知らせ詳細は `AnnouncementController`、お知らせの登録は `AnnouncementRegistrationController` である。未認証の保護画面は `auth` が名前付きルート `login` へ戻す。`api/*` の例外だけ JSON で描画する。
 
 ### アカウント
 
-`User` は `Authenticatable` で、名前、メール、パスワードを fillable にし、パスワードと remember token を hidden にする。認証の既定ガードは `web`、パスワードブローカは `users` である。ログインは `LoginAttempt` がこのガードのセッションを始める。ファクトリとシーダが確認用の利用者を作る。
+`User` は `Authenticatable` で、名前、メール、パスワードを fillable にし、`admin` は fillable にしない。`admin` は真偽で、既定は偽であり、真の利用者が管理者である。パスワードと remember token を hidden にする。認証の既定ガードは `web`、パスワードブローカは `users` である。ログインは `LoginAttempt` がこのガードのセッションを始める。ファクトリとシーダが確認用の利用者を作る。
 
 ### 結果
 
@@ -37,6 +37,8 @@ tags: [architecture]
 ### 起動
 
 `bootstrap/providers.php` は `AppServiceProvider` だけを登録する。`register` と `boot` は空である。
+
+Rationale: [ADR-2](/decision/2-user-admin-flag.md)
 
 ## Runtime View
 HTTP リクエストは `public/index.php`、HTTP カーネル、Web ミドルウェア、`routes/web.php` または `/up` の順で処理する。保護画面は `auth` を通り、未認証ならログインへ戻る。ログインの成否は `Result` でコントローラへ戻り、失敗なら同じ拒否を出す。Artisan は `routes/console.php` を読む。開発コマンド `composer dev` は `php artisan serve`、`queue:listen`、`pail`、`npm run dev` を同時に起動する。`Result` の合成は呼び出し元のプロセス内で終わり、キューやイベントとしては配送しない。
