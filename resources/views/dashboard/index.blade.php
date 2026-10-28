@@ -12,6 +12,14 @@
     </head>
     <body class="bg-[#FDFDFC] text-[#1b1b18] dark:bg-[#0a0a0a] dark:text-[#EDEDEC] min-h-screen flex flex-col gap-6 p-6 lg:p-8">
         <header class="flex items-center justify-end gap-4">
+            @if (auth()->user()?->admin)
+                <a
+                    href="{{ route('announcements.register.create') }}"
+                    class="inline-block px-5 py-1.5 border border-[#19140035] dark:border-[#3E3E3A] rounded-sm text-sm leading-normal text-[#1b1b18] dark:text-[#EDEDEC]"
+                >
+                    登録
+                </a>
+            @endif
             <form method="POST" action="{{ route('logout') }}">
                 @csrf
                 <button

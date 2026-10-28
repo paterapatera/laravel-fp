@@ -1,13 +1,13 @@
 # Tasks
 
-- [ ] 1. 利用者の管理者フラグを保存する (P)
+- [x] 1. 利用者の管理者フラグを保存する (P)
   - 1.1 `users` に既定が偽の `admin` を追加する
     - Requirements: DATA-ANR-NEW-1
   - 1.2 `User` は `admin` を真偽で保持し、fillable には入れない。未指定のファクトリは偽で、テストは真を指定できる
     - Requirements: DATA-ANR-NEW-1
   - 1.3 管理者フラグが残り、未指定は偽である結合テストを書く
     - Requirements: DATA-ANR-NEW-1
-- [ ] 2. 下書きを一件追加する (P)
+- [x] 2. 下書きを一件追加する (P)
   - 2.1 `AnnouncementRegistrar` が、Unicode の空白だけを除くと空になる題名、要約、本文を拒否する
     - Requirements: REQ-ANR-NEW-11
   - 2.2 空白以外の題名、要約、本文なら、文字をそのまま状態 draft、開始と終了が空の下書きとして一件追加する。別の登録はもう一件増える
@@ -16,7 +16,7 @@
     - Requirements: REQ-ANR-NEW-11
   - 2.4 draft の追加、一覧に題名が出ないこと、開始と終了が空であることの結合テストを書く
     - Requirements: REQ-ANR-NEW-14, REQ-ANR-NEW-15
-- [ ] 3. 管理者だけに登録の入口を出す
+- [x] 3. 管理者だけに登録の入口を出す
   - Depends on: 1
   - 3.1 ダッシュボードは `admin` が真のときだけ文言「登録」で登録画面へリンクし、一覧では編集と削除を出さない
     - Requirements: REQ-ANN-10, REQ-ANR-NEW-1, REQ-ANR-NEW-2
@@ -26,7 +26,7 @@
     - Requirements: REQ-ANR-NEW-4, REQ-ANR-NEW-5, REQ-ANR-NEW-7, REQ-ANR-NEW-9
   - 3.4 入口、空の登録画面、ログインへの移動、404 の結合テストを書く
     - Requirements: REQ-ANN-10, REQ-ANR-NEW-1, REQ-ANR-NEW-2, REQ-ANR-NEW-3, REQ-ANR-NEW-4, REQ-ANR-NEW-5, REQ-ANR-NEW-7, REQ-ANR-NEW-9
-- [ ] 4. 登録を受け付けて題名だけを示す
+- [x] 4. 登録を受け付けて題名だけを示す
   - Depends on: 2, 3
   - 4.1 空白だけの項目は保存せず、「題名がありません」「要約がありません」「本文がありません」のうち該当だけを示し、入力した文字を残す
     - Requirements: REQ-ANR-NEW-12, REQ-ANR-NEW-13

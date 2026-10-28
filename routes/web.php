@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\AnnouncementController;
+use App\Http\Controllers\AnnouncementRegistrationController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\LoginController;
 use Illuminate\Support\Facades\Route;
@@ -18,6 +19,12 @@ Route::post('/logout', [LoginController::class, 'destroy'])->name('logout');
 
 Route::middleware('auth')->group(function (): void {
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
+    Route::get('/announcements/register', [AnnouncementRegistrationController::class, 'create'])
+        ->name('announcements.register.create');
+    Route::post('/announcements/register', [AnnouncementRegistrationController::class, 'store'])
+        ->name('announcements.register.store');
+    Route::get('/announcements/registered', [AnnouncementRegistrationController::class, 'created'])
+        ->name('announcements.register.created');
     Route::get('/announcements/{announcement}', [AnnouncementController::class, 'show'])
         ->whereNumber('announcement')
         ->name('announcements.show');
