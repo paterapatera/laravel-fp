@@ -20,7 +20,7 @@ final class AnnouncementVisibility
             return false;
         }
 
-        if ($this->isBlank($title) || $this->isBlank($summary) || $this->isBlank($body)) {
+        if (self::isBlank($title) || self::isBlank($summary) || self::isBlank($body)) {
             return false;
         }
 
@@ -31,7 +31,7 @@ final class AnnouncementVisibility
         return $now >= $startsAt && $now <= $endsAt;
     }
 
-    private function isBlank(?string $value): bool
+    public static function isBlank(?string $value): bool
     {
         if ($value === null) {
             return true;

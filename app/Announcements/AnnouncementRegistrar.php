@@ -51,16 +51,11 @@ final class AnnouncementRegistrar
         $blankFields = [];
 
         foreach ($fields as $name => $value) {
-            if ($this->isBlank($value)) {
+            if (AnnouncementVisibility::isBlank($value)) {
                 $blankFields[] = $name;
             }
         }
 
         return $blankFields;
-    }
-
-    private function isBlank(string $value): bool
-    {
-        return preg_match('/\A\p{White_Space}*\z/u', $value) === 1;
     }
 }
