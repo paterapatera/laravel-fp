@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-const PACKAGE_VERSION = "0.3.15";
+const PACKAGE_VERSION = "0.3.16";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
