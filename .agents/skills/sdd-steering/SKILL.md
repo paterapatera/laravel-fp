@@ -5,9 +5,9 @@ description: Create or resynchronize steering documents from the code. Use when 
 
 # sdd-steering
 
-Docs directory: `docs/sdd`. Write bodies in `ja`. Base branch: `main`.
+Docs directory: `docs`. Write bodies in `ja`. Base branch: `main`.
 
-Run `bun .agents/skills/sdd-scripts/sdd.mjs check --scope setup` first. Continue when the only failure is `SETUP_STEERING_MISSING`. Stop on every other setup failure. Do not create an issue directory and do not create a branch. Stop when `docs/sdd/issues/<current-branch>/` exists.
+Run `bun .agents/skills/sdd-scripts/sdd.mjs check --scope setup` first. Continue when the only failure is `SETUP_STEERING_MISSING`. Stop on every other setup failure. Do not create an issue directory and do not create a branch. Stop when `docs/issues/<current-branch>/` exists.
 
 If `steering/` is missing, create it. If it exists, resynchronize it. When a required file is missing during resync, create that file. There is no mode flag.
 

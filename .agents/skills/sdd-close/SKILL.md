@@ -5,7 +5,7 @@ description: Apply the issue delta to permanent docs and prepare the pull reques
 
 # sdd-close
 
-Docs directory: `docs/sdd`. Bodies stay in `ja`. Base branch: `main`. Issue directory: `docs/sdd/issues/<current-branch>/`.
+Docs directory: `docs`. Bodies stay in `ja`. Base branch: `main`. Issue directory: `docs/issues/<current-branch>/`.
 
 Run `bun .agents/skills/sdd-scripts/sdd.mjs check --scope setup` first. Only this skill updates permanent specs, decisions, and steering for an issue. Implementation reads the current docs plus the issue delta. Open `.agents/skills/sdd-scripts/sdd.mjs` only for a report this skill does not explain.
 

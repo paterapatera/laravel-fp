@@ -5,7 +5,7 @@ description: Research options and write the design delta for the current SDD iss
 
 # sdd-design
 
-Docs directory: `docs/sdd`. Write bodies in `ja`. Issue directory: `docs/sdd/issues/<current-branch>/`. Stop when it is missing.
+Docs directory: `docs`. Write bodies in `ja`. Issue directory: `docs/issues/<current-branch>/`. Stop when it is missing.
 
 Run `bun .agents/skills/sdd-scripts/sdd.mjs check --scope setup` first; it prints `ok: setup` when it passes. List the issue directory to see which files exist. Stop when `requirements.md` has an open `- [ ] Q` item, and tell the user to finish `/sdd-req`.
 

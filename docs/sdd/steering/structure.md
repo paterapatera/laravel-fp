@@ -18,8 +18,8 @@ tags: [structure]
 | `resources/` | Blade、CSS、JS |
 | `routes/` | HTTP とコンソールの入口 |
 | `tests/` | Pest と PHPUnit。PSR-4 の `Tests\` |
-| `docs/sdd/` | 仕様、決定、このステアリング |
-| `docs/specs/` | Kiro 形式の仕様木。`docs/sdd/specs/` とは別である |
+| `docs/knowledge/` | 仕様、決定、このステアリング |
+| `docs/specs/` | Kiro 形式の仕様木。`docs/knowledge/specs/` とは別である |
 | `docs/steering/` | Kiro 形式のプロジェクトメモリ。このディレクトリとは別である |
 | `docs/settings/` | 文書テンプレート |
 | `.agents/skills/` | SDD スキル |
@@ -65,7 +65,7 @@ Composer の PSR-4 は `App\` が `app/`、`Database\Factories\` が `database/f
 - テストは `App\` を参照する。アプリケーションコードは `Tests\` を参照しない。
 
 ## Code-to-Specs Mapping
-振る舞いの仕様は `docs/sdd/specs/<domain>/<capability>/` に置く。ドメインの一覧は [仕様](/specs/) である。
+振る舞いの仕様は `docs/knowledge/specs/<domain>/<capability>/` に置く。ドメインの一覧は [仕様](/specs/) である。
 
 | コード | 仕様上の置き場 |
 | --- | --- |

@@ -5,7 +5,7 @@ description: Apply a review comment, defect, or requirement change before close.
 
 # sdd-fix
 
-Docs directory: `docs/sdd`. Issue directory: `docs/sdd/issues/<current-branch>/`. Stop when `task.md` is missing. Run setup check first. Execute only the `Fix:` majors you add. Leave other unchecked majors for `/sdd-impl`.
+Docs directory: `docs`. Issue directory: `docs/issues/<current-branch>/`. Stop when `task.md` is missing. Run setup check first. Execute only the `Fix:` majors you add. Leave other unchecked majors for `/sdd-impl`.
 
 ## Level
 

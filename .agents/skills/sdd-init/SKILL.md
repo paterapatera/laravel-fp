@@ -5,19 +5,46 @@ description: Create an SDD proposal for a new change. Use when the user runs /sd
 
 # sdd-init
 
-Docs directory: `docs/sdd`. Write bodies in `ja`. Base branch: `main`.
+Docs directory: `docs`. Write bodies in `ja`. Base branch: `main`.
 
 Run `bun .agents/skills/sdd-scripts/sdd.mjs check --scope setup` first. Stop unless it passes. This command does not commit.
 
 ## Steps
 
-1. Read the requested change, `docs/sdd/specs/`, and `docs/sdd/steering/`.
+1. Read the requested change, `docs/knowledge/specs/`, and `docs/knowledge/steering/`.
 2. Propose a feature name: lowercase kebab-case, at most 40 characters. A tracker key may be a prefix (`1-invoice-reissue` or `PROJ-123-invoice-reissue`). Stop if that directory or branch already exists, with or without a key.
 3. Ask at most 3 questions, only to settle Why, What Changes, and Out of Scope. Each question decides one thing, and each option states only the result that differs. Put background in one or two chat sentences before the questions, not in them. Keep a question near 30 characters and an option near 15 in ja, or near 12 and 6 words otherwise, not counting its score. Prefix each option with a score from 1 to 5, as in `[5] ...`, where 5 is best. The score weighs safety most, then closeness to the ideal form, then low implementation effort. List options from the highest score. The score is the recommendation, so add no separate recommended label.
-4. Write `docs/sdd/issues/<feature>/proposal.md` with `# <title>`, Why, What Changes, Impact, and Out of Scope. The title is one line in `ja` and does not contain the feature name or tracker key.
+4. Write `docs/issues/<feature>/proposal.md` with `# <title>`, Why, What Changes, Impact, and Out of Scope. The title is one line in `ja` and does not contain the feature name or tracker key.
 5. Impact always has Type, Capabilities, Steering, Decisions, and Code. Use `none` when an item does not apply. Type is a Conventional Commits type. Capabilities use New, Modified, Removed, Moved, Split, or Merged plus a `/specs/...` path. Name a new domain explicitly.
 6. When Capabilities cross two domains, or six or more capabilities, suggest splitting the issue. Do not force the split.
 7. Do not rename directories or branches, and do not create the branch.
+
+`check` reads only the `- Type:` line of `proposal.md`, so there is no need to open `.agents/skills/sdd-scripts/sdd.mjs`. Follow this shape, and write the text in `ja`:
+
+```markdown
+# Credit notes for returned orders
+
+## Why
+
+Clerks refund returned orders by hand, and accounting cannot see the refunds.
+
+## What Changes
+
+- Clerks issue a credit note for a returned order.
+- Accounting receives each credit note.
+
+## Impact
+
+- Type: feat
+- Capabilities: New /specs/returns/credit-note (new domain /specs/returns), Modified /specs/billing/invoice
+- Steering: /steering/tech.md
+- Decisions: none
+- Code: invoice screens and the accounting client
+
+## Out of Scope
+
+- Partial refunds
+```
 
 ## Commit
 

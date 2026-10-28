@@ -5,7 +5,7 @@ description: Record existing behavior as specifications without changing it. Use
 
 # sdd-reverse
 
-Docs directory: `docs/sdd`. Write bodies in `ja`. Issue directory: `docs/sdd/issues/<current-branch>/`.
+Docs directory: `docs`. Write bodies in `ja`. Issue directory: `docs/issues/<current-branch>/`.
 
 Run setup check first. Stop unless `proposal.md` has `Type: docs` and requirements, research, design, and task are absent. Stay on the issue branch. Cover at most one domain.
 

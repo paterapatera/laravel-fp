@@ -5,7 +5,7 @@ description: Plan and implement a small change that does not alter specs, steeri
 
 # sdd-quick
 
-Docs directory: `docs/sdd`. Issue directory: `docs/sdd/issues/<current-branch>/`. Do not ask questions. Run setup check first.
+Docs directory: `docs`. Issue directory: `docs/issues/<current-branch>/`. Do not ask questions. Run setup check first.
 
 Stop before writing anything when any of these is false: `proposal.md` exists, Impact Capabilities, Steering, and Decisions are all `none`, and requirements, research, and design are absent. When `task.md` exists and a major item is unchecked, resume it instead of replanning.
 

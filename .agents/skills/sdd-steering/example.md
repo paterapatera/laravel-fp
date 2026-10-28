@@ -1,6 +1,6 @@
 # Steering example
 
-Each block below is one file in `docs/sdd/steering/`, and together they pass `check` once `/specs/billing/` exists. Copy the frontmatter, heading order, glossary term level, and link form. Write the bodies in `ja` from the code, and replace every product fact.
+Each block below is one file in `docs/knowledge/steering/`, and together they pass `check` once `/specs/billing/` exists. Copy the frontmatter, heading order, glossary term level, and link form. Write the bodies in `ja` from the code, and replace every product fact.
 
 ## product.md
 

@@ -5,9 +5,9 @@ description: Implement the unchecked major tasks for the current SDD issue. Use 
 
 # sdd-impl
 
-Docs directory: `docs/sdd`. Issue directory: `docs/sdd/issues/<current-branch>/`. Stop when `task.md` is missing.
+Docs directory: `docs`. Issue directory: `docs/issues/<current-branch>/`. Stop when `task.md` is missing.
 
-Run `bun .agents/skills/sdd-scripts/sdd.mjs check --scope setup` first. Read the issue documents plus the current specs and the issue delta together. Do not edit `docs/sdd/specs/`, `decision/`, or `steering/`.
+Run `bun .agents/skills/sdd-scripts/sdd.mjs check --scope setup` first. Read the issue documents plus the current specs and the issue delta together. Do not edit `docs/knowledge/specs/`, `decision/`, or `steering/`.
 
 ## Execution
 

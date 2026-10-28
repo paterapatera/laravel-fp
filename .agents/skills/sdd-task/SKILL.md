@@ -5,7 +5,7 @@ description: Split the current SDD design into implementation tasks. Use when th
 
 # sdd-task
 
-Docs directory: `docs/sdd`. Write task text in `ja`. Issue directory: `docs/sdd/issues/<current-branch>/`. Stop when `design.md` is missing. Do not ask questions.
+Docs directory: `docs`. Write task text in `ja`. Issue directory: `docs/issues/<current-branch>/`. Stop when `design.md` is missing. Do not ask questions.
 
 Run `bun .agents/skills/sdd-scripts/sdd.mjs check --scope setup` first. Read requirements, design, and steering.
 
