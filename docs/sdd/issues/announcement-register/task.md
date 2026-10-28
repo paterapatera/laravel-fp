@@ -36,7 +36,7 @@
     - Requirements: REQ-ANR-NEW-6, REQ-ANR-NEW-8, REQ-ANR-NEW-10, REQ-ANR-NEW-18, REQ-ANR-NEW-19
   - 4.4 不足の表示、成功画面、権限の拒否、再送、管理者フラグの結合テストを書く
     - Requirements: REQ-ANR-NEW-3, REQ-ANR-NEW-6, REQ-ANR-NEW-8, REQ-ANR-NEW-10, REQ-ANR-NEW-12, REQ-ANR-NEW-13, REQ-ANR-NEW-14, REQ-ANR-NEW-15, REQ-ANR-NEW-16, REQ-ANR-NEW-17, REQ-ANR-NEW-18, REQ-ANR-NEW-19
-- [ ] 5. Manual verification
+- [x] 5. Manual verification
   - Depends on: 4
   - 5.1 管理者でダッシュボードから空の登録画面を開き、一覧と詳細に編集と削除が無く、詳細とウェルカムに登録リンクが無いことを確認する
     - Requirements: REQ-ANN-10, REQ-ANR-NEW-1, REQ-ANR-NEW-3, REQ-ANR-NEW-4
