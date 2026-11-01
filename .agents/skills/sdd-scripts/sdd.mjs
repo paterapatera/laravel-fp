@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-const PACKAGE_VERSION = "0.3.16";
+const PACKAGE_VERSION = "1.1.0";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
@@ -76,7 +76,10 @@ function diag(file, line, rule, message, extra = {}) {
 }
 
 function formatDiagnostics(items) {
-  return items.map((item) => `${item.path}:${item.line}: ${item.rule} ${item.message}`).join("\n");
+  return items.map((item) => {
+    const prefix = item.note ? "note: " : "";
+    return `${item.path}:${item.line}: ${prefix}${item.rule} ${item.message}`;
+  }).join("\n");
 }
 
 function splitFrontmatter(text) {
@@ -205,6 +208,337 @@ const PROVISIONAL_RE = /\b((?:REQ|IF|DATA|NFR)-[A-Z]{2,6}-NEW-\d+|ADR-NEW-\d+)\b
 function freshIdPattern(prefix, cap) {
   return new RegExp(`\\b${prefix}-${cap}-(\\d+)\\b`, "g");
 }
+
+const LESSON_STATUSES = ["candidate", "trial", "effective", "ineffective", "rejected"];
+const LESSON_TARGETS = ["steering", "config-or-code", "sdd-orc-skill"];
+const LESSON_SECTIONS = ["What happened", "Why", "Policy", "Occurrences", "Occurrence log", "Review closes", "Last reviewed", "Status", "Reason", "Target"];
+const LAST_REVIEWED_DATE = /^\d{4}-\d{2}-\d{2}$/;
+const TRIAL_TO_EFFECTIVE_ISSUE_COUNT = 3;
+
+const OCCURRENCE_LOG_LINE = /^-\s+(\d{4}-\d{2}-\d{2}):\s+(\S(?:.*\S)?)\s*$/;
+const REVIEW_CLOSE_LINE = /^-\s+(\d{4}-\d{2}-\d{2})\s*$/;
+
+const SLUG_RE = /^lessons\/(?!index\.md$)[a-z0-9]+(?:-[a-z0-9]+)*\.md$/;
+const LESSONS_LINE = /^-\s+Lessons:\s*(.+)\s*$/;
+const KEBAB_SLUG = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+
+function lessonInner(rel, docsDir) {
+  if (!rel.startsWith(`${docsDir}/`)) return "";
+  return rel.slice(docsDir.length + 1);
+}
+
+function isLessonPageRel(docsDir, rel) {
+  const inner = lessonInner(rel, docsDir);
+  return SLUG_RE.test(inner);
+}
+
+function isLessonsIndexRel(docsDir, rel) {
+  return lessonInner(rel, docsDir) === "lessons/index.md";
+}
+
+function parseSections(body) {
+  const sections = new Map();
+  const lines = body.replace(/\r\n/g, "\n").replace(/\s+$/, "").split("\n");
+  const h1 = lines.findIndex((line) => /^# /.test(line));
+  let index = h1 >= 0 ? h1 + 1 : 0;
+  while (index < lines.length) {
+    const match = /^## (.+)$/.exec(lines[index]);
+    if (!match) {
+      index += 1;
+      continue;
+    }
+    const title = match[1].trim();
+    const start = index + 1;
+    index += 1;
+    while (index < lines.length && !/^## /.test(lines[index]) && !/^# /.test(lines[index])) index += 1;
+    const content = lines.slice(start, index).join("\n").trim();
+    sections.set(title, content);
+  }
+  return sections;
+}
+
+function lessonTitle(body) {
+  const match = /^# (.+)$/m.exec(body);
+  return match ? match[1].trim() : "";
+}
+
+function firstSentence(text) {
+  const trimmed = text.replace(/\s+/g, " ").trim();
+  if (!trimmed) return "";
+  const cut = trimmed.match(/^[^。．.!?]+[。．.!?]?/);
+  return (cut ? cut[0] : trimmed.slice(0, 120)).trim();
+}
+
+function lessonSlugs(map, docsDir) {
+  return [...map.keys()]
+    .filter((rel) => typeof map.get(rel) === "string" && isLessonPageRel(docsDir, rel))
+    .map((rel) => path.posix.basename(rel, ".md"))
+    .sort();
+}
+
+function countOccurrenceLogEntries(text) {
+  let count = 0;
+  for (const line of String(text || "").split("\n")) {
+    if (OCCURRENCE_LOG_LINE.test(line.trim())) count += 1;
+  }
+  return count;
+}
+
+function parseOccurrenceLogLines(text) {
+  const entries = [];
+  for (const line of String(text || "").split("\n")) {
+    const match = OCCURRENCE_LOG_LINE.exec(line.trim());
+    if (match) entries.push({ date: match[1], description: match[2] });
+  }
+  return entries;
+}
+
+function validateOccurrenceLogSection(rel, text, diags) {
+  for (const line of String(text || "").split("\n")) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+    if (!OCCURRENCE_LOG_LINE.test(trimmed)) {
+      diags.push(diag(rel, 1, "LESSONS_OCCURRENCE_LOG", "Each Occurrence log line must be - YYYY-MM-DD: <description> (no issue or branch names)"));
+      break;
+    }
+  }
+}
+
+function validateReviewClosesSection(rel, text, diags) {
+  for (const line of String(text || "").split("\n")) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+    if (!REVIEW_CLOSE_LINE.test(trimmed)) {
+      diags.push(diag(rel, 1, "LESSONS_REVIEW_CLOSES", "Each Review closes line must be - YYYY-MM-DD (close date when the lesson was reviewed without a new occurrence)"));
+      break;
+    }
+  }
+}
+
+function parseLastReviewedDate(text) {
+  const trimmed = String(text || "").trim();
+  if (!trimmed) return "";
+  return LAST_REVIEWED_DATE.test(trimmed) ? trimmed : null;
+}
+
+function validateLastReviewedSection(rel, text, diags) {
+  const trimmed = String(text || "").trim();
+  if (!trimmed) return;
+  if (!LAST_REVIEWED_DATE.test(trimmed)) {
+    diags.push(diag(rel, 1, "LESSONS_LAST_REVIEWED", "Last reviewed must be empty or a single YYYY-MM-DD date"));
+  }
+}
+
+function parseLessonsDisposition(line) {
+  const match = LESSONS_LINE.exec(line.trim());
+  if (!match) return null;
+  const value = match[1].trim();
+  if (value.startsWith("excluded:")) return { type: "excluded", value };
+  if (KEBAB_SLUG.test(value)) return { type: "slug", value };
+  return { type: "invalid", value };
+}
+
+function parseFeedbackEntries(feedbackText) {
+  if (!feedbackText.trim()) return [];
+  const entries = [];
+  const lines = feedbackText.replace(/\r\n/g, "\n").split("\n");
+  let current = null;
+  for (let index = 0; index < lines.length; index += 1) {
+    const match = /^## (.+)$/.exec(lines[index]);
+    if (!match) continue;
+    if (current) entries.push(current);
+    current = { heading: match[1].trim(), line: index + 1, lines: [] };
+  }
+  if (current) {
+    for (let index = current.line; index < lines.length; index += 1) {
+      if (/^## /.test(lines[index])) break;
+      if (index === current.line - 1) continue;
+      current.lines.push(lines[index]);
+    }
+    entries.push(current);
+  }
+  return entries;
+}
+
+function feedbackDisposition(entry) {
+  for (const line of entry.lines) {
+    const parsed = parseLessonsDisposition(line);
+    if (parsed) return parsed;
+  }
+  return null;
+}
+
+function parseFixItems(taskText) {
+  const fixes = [];
+  if (!taskText) return fixes;
+  const lines = taskText.replace(/\r\n/g, "\n").split("\n");
+  for (let index = 0; index < lines.length; index += 1) {
+    if (!/^\s*-\s+\[[ xX]\]\s+\d+(?:\.\d+)?\.\s+Fix:/.test(lines[index])) continue;
+    const block = [lines[index]];
+    for (let j = index + 1; j < lines.length; j += 1) {
+      if (/^\s*-\s+\[[ xX]\]\s+\d+\./.test(lines[j]) && !/Fix:/.test(lines[j])) break;
+      if (/^\s*-\s+\[[ xX]\]\s+\d+(?:\.\d+)?\./.test(lines[j]) && j !== index) break;
+      if (/^-\s+\[[ xX]\]\s+\d+\.\s/.test(lines[j]) && !/^\s+/.test(lines[j]) && j !== index) break;
+      block.push(lines[j]);
+      if (/^\S/.test(lines[j]) && j > index) break;
+    }
+    fixes.push({ line: index + 1, lines: block });
+  }
+  return fixes;
+}
+
+function fixDisposition(fix) {
+  for (const line of fix.lines) {
+    const parsed = parseLessonsDisposition(line);
+    if (parsed) return parsed;
+  }
+  return null;
+}
+
+function validateCloseLessons(config, issue, files, map, diags, docsDir) {
+  const feedbackPath = `${config.docsDir}/issues/${issue}/feedback.md`;
+  const feedbackText = files.feedback || "";
+  const entries = parseFeedbackEntries(feedbackText);
+  for (const entry of entries) {
+    const disposition = feedbackDisposition(entry);
+    if (!disposition) {
+      diags.push(diag(feedbackPath, entry.line, "LESSONS_UNPROCESSED", `Add - Lessons: <slug> or - Lessons: excluded: <reason> after approval for "${entry.heading}"`));
+      continue;
+    }
+    if (disposition.type === "invalid") {
+      diags.push(diag(feedbackPath, entry.line, "LESSONS_UNPROCESSED", `Invalid Lessons line for "${entry.heading}"`));
+      continue;
+    }
+    if (disposition.type === "slug") {
+      const rel = `${docsDir}/lessons/${disposition.value}.md`;
+      if (!map.has(rel)) {
+        diags.push(diag(feedbackPath, entry.line, "LESSONS_UNPROCESSED", `Lessons slug ${disposition.value} has no page at knowledge/lessons/${disposition.value}.md`));
+      }
+    }
+  }
+  const fixes = parseFixItems(files.task);
+  for (const fix of fixes) {
+    const disposition = fixDisposition(fix);
+    if (!disposition) {
+      diags.push(diag(`${config.docsDir}/issues/${issue}/task.md`, fix.line, "LESSONS_UNPROCESSED", "Each Fix: item needs - Lessons: <slug> or - Lessons: excluded: <reason> after approval"));
+      continue;
+    }
+    if (disposition.type === "slug") {
+      const rel = `${docsDir}/lessons/${disposition.value}.md`;
+      if (!map.has(rel)) {
+        diags.push(diag(`${config.docsDir}/issues/${issue}/task.md`, fix.line, "LESSONS_UNPROCESSED", `Lessons slug ${disposition.value} has no page at knowledge/lessons/${disposition.value}.md`));
+      }
+    }
+  }
+}
+
+function regenerateLessonsIndex(map, docsDir) {
+  const indexRel = `${docsDir}/lessons/index.md`;
+  if (!map.has(indexRel) && !lessonSlugs(map, docsDir).length) return;
+  const header = `# Lessons
+
+What went wrong in past work and which policy prevents a repeat.
+`;
+  const entries = [];
+  for (const slug of lessonSlugs(map, docsDir)) {
+    const rel = `${docsDir}/lessons/${slug}.md`;
+    const body = String(map.get(rel)).replace(/^---[\s\S]*?---\n?/, "");
+    const sections = parseSections(body);
+    const title = lessonTitle(body) || slug;
+    const problem = firstSentence(sections.get("What happened") || "");
+    const why = firstSentence(sections.get("Why") || "");
+    const policy = firstSentence(sections.get("Policy") || "");
+    const summary = [problem, why, policy].filter(Boolean).join(" ");
+    entries.push(`* [${title}](/lessons/${slug}/) - ${summary || title}`);
+  }
+  const lines = header.trimEnd().split("\n");
+  if (entries.length) {
+    lines.push("");
+    lines.push(...entries);
+  }
+  lines.push("");
+  map.set(indexRel, `${lines.join("\n")}`);
+}
+
+function validateLessons(map, docsDir, diags) {
+  const indexRel = `${docsDir}/lessons/index.md`;
+  const slugs = lessonSlugs(map, docsDir);
+  const hasLessons = slugs.length > 0 || map.has(indexRel);
+  if (!hasLessons) return;
+
+  if (!map.has(indexRel)) {
+    diags.push(diag(indexRel, 1, "LESSONS_INDEX", "lessons/index.md is required when lesson pages exist"));
+    return;
+  }
+
+  const indexedSlugs = new Set();
+  for (const line of String(map.get(indexRel)).split("\n")) {
+    const match = /^\* \[([^\]]+)\]\(\/lessons\/([a-z0-9]+(?:-[a-z0-9]+)*)\/\)/.exec(line.trim());
+    if (!match) continue;
+    indexedSlugs.add(match[2]);
+  }
+
+  for (const slug of slugs) {
+    if (!indexedSlugs.has(slug)) {
+      diags.push(diag(indexRel, 1, "LESSONS_INDEX", `Index is missing entry for lesson ${slug}`));
+    }
+  }
+  for (const slug of indexedSlugs) {
+    if (!slugs.includes(slug)) {
+      diags.push(diag(indexRel, 1, "LESSONS_INDEX", `Index links to missing lesson page ${slug}.md`));
+    }
+  }
+
+  for (const slug of slugs) {
+    const rel = `${docsDir}/lessons/${slug}.md`;
+    const raw = String(map.get(rel));
+    const body = raw.replace(/^---[\s\S]*?---\n?/, "");
+    if (!/^# .+/m.test(body)) diags.push(diag(rel, 1, "LESSONS_PAGE", "Lesson page needs an H1 title"));
+    const sections = parseSections(body);
+    for (const name of LESSON_SECTIONS) {
+      if (name === "Last reviewed") {
+        if (sections.has(name)) validateLastReviewedSection(rel, sections.get(name), diags);
+        continue;
+      }
+      if (!sections.has(name)) diags.push(diag(rel, 1, "LESSONS_PAGE", `Missing section ## ${name}`));
+    }
+    const status = (sections.get("Status") || "").trim().toLowerCase();
+    const reason = (sections.get("Reason") || "").trim();
+    if (!LESSON_STATUSES.includes(status)) {
+      diags.push(diag(rel, 1, "LESSONS_STATUS", `Status must be one of ${LESSON_STATUSES.join(", ")}`));
+    }
+    const target = (sections.get("Target") || "").trim();
+    if (!LESSON_TARGETS.includes(target)) {
+      diags.push(diag(rel, 1, "LESSONS_TARGET", `Target must be one of ${LESSON_TARGETS.join(", ")}`));
+    }
+    const negative = ["ineffective", "rejected"].includes(status);
+    if (negative && !reason) {
+      diags.push(diag(rel, 1, "LESSONS_REASON", "Reason is required when status is ineffective or rejected"));
+    }
+    if (!negative && reason) {
+      diags.push(diag(rel, 1, "LESSONS_REASON", "Reason must be empty unless status is ineffective or rejected"));
+    }
+    const occ = (sections.get("Occurrences") || "").trim();
+    const logText = sections.get("Occurrence log") || "";
+    const logCount = countOccurrenceLogEntries(logText);
+    validateOccurrenceLogSection(rel, logText, diags);
+    validateReviewClosesSection(rel, sections.get("Review closes") || "", diags);
+    if (!/^\d+$/.test(occ) || Number(occ) < 1) {
+      diags.push(diag(rel, 1, "LESSONS_OCCURRENCES", "Occurrences must be a positive integer"));
+    } else if (logCount > 0 && Number(occ) < logCount) {
+      diags.push(diag(rel, 1, "LESSONS_OCCURRENCES", `Occurrences must be at least the number of Occurrence log entries (${logCount})`));
+    }
+  }
+}
+
+const FEEDBACK_HEADING = `# Feedback
+
+Append-only log for this issue. Add one \`##\` entry per event (short, plain language).
+
+Entry heading format: \`## YYYY-MM-DD <skill> — <kind>\`
+
+After the person confirms lesson records at close, add \`- Lessons: <kebab-slug>\` or \`- Lessons: excluded: <reason>\` to each entry (and under each Fix: item in task.md when used).
+`;
 
 function headingNodes(markdown) {
   const lines = markdown.replace(/\r\n/g, "\n").split("\n");
@@ -627,6 +961,7 @@ function scenarioBlocks(body) {
 }
 
 const SPEC_FILES = ["spec.md", "interfaces.md", "data.md", "quality.md"];
+const AUTO_TEST_LEVELS = TEST_LEVELS.filter((level) => level !== "Manual");
 const ITEM_SECTION = { REQ: "Requirements", IF: "Interfaces", DATA: "Entities", NFR: "Quality Requirements" };
 
 function findRoot(start) {
@@ -711,6 +1046,8 @@ function classify(docsDir, rel) {
   if (!rel.startsWith(`${docsDir}/`)) return "";
   const inner = rel.slice(docsDir.length + 1);
   if (inner.startsWith("issues/")) return "issue";
+  if (inner === "lessons/index.md") return "lesson-index";
+  if (/^lessons\/(?!index\.md$)[a-z0-9]+(?:-[a-z0-9]+)*\.md$/.test(inner)) return "lesson";
   if (inner === "index.md" || inner === "specs/index.md" || inner === "decision/index.md" || inner === "steering/index.md") return "index";
   if (/^specs\/[^/]+\/index\.md$/.test(inner) || /^specs\/[^/]+\/[^/]+\/index\.md$/.test(inner)) return "index";
   if (inner === "specs/log.md" || inner === "decision/log.md" || inner === "steering/log.md") return "log";
@@ -935,12 +1272,13 @@ function regenerateIndexes(map, docsDir) {
     writeTaggedIndex(map, docsDir, "steering", "Steering", "How the product is built and operated today.", "steering");
   }
   const rootEntries = [];
-  for (const area of ["specs", "decision", "steering"]) {
+  for (const area of ["specs", "decision", "steering", "lessons"]) {
     const indexRel = `${docsDir}/${area}/index.md`;
     if (!map.has(indexRel)) continue;
-    const header = areaHeader(map.get(indexRel), area, "");
+    const header = areaHeader(map.get(indexRel), area, area === "lessons" ? "What went wrong in past work and which policy prevents a repeat." : "");
     rootEntries.push(`* [${header.title}](/${area}/) - ${header.description}`);
   }
+  regenerateLessonsIndex(map, docsDir);
   const root = `${renderFrontmatter({ okf_version: "0.2" }, ["okf_version"])}${rootEntries.join("\n")}\n`;
   map.set(`${docsDir}/index.md`, root);
 }
@@ -1684,6 +2022,7 @@ function validateTree(map, docsDir, options = {}) {
     if (["doc", "adr", "steering", "index"].includes(kind)) validateLinks(rel, value, map, docsDir, diags);
   }
   validateGlossary(map, docsDir, diags);
+  validateLessons(map, docsDir, diags);
   finishRefs(map, docsDir, diags);
   if (options.stage === "close") {
     for (const [rel, value] of map) {
@@ -1696,7 +2035,8 @@ function validateTree(map, docsDir, options = {}) {
   regenerateIndexes(fresh, docsDir);
   for (const [rel, value] of fresh) {
     if (!rel.endsWith("/index.md") && rel !== `${docsDir}/index.md`) continue;
-    if (map.get(rel) !== value) diags.push(diag(rel, 1, "INDEX_STALE", "Run index to regenerate this file"));
+    if (classify(docsDir, rel) === "lesson") continue;
+    if (map.get(rel) !== value) diags.push(diag(rel, 1, "INDEX_STALE", `Run ${indexCommand(options.config)} to regenerate this file`));
   }
   return diags;
 }
@@ -1942,6 +2282,7 @@ function readIssue(root, config, issue) {
     design: read("design.md"),
     research: read("research.md"),
     task: read("task.md"),
+    feedback: read("feedback.md"),
   };
 }
 
@@ -1970,9 +2311,11 @@ function staticIssueDiags(root, config, issue, stage) {
   validateDeltaEars(delta, config.lang || "en", diags);
   validateDeltaIds(root, config, delta, diags);
   if (files.design) validateTraceability(files, delta, config, issue, diags);
+  if (files.design) validateDesignMechanical(files, config, issue, diags);
   if (files.task && files.design) validateTasks(files, config, issue, diags);
   if (files.research) validateResearch(files.research, delta, diags, config, issue);
   if (stage === "close") validateClose(root, config, issue, files, docsOnly, quick, diags);
+  if (stage === "impl") validateImpl(root, config, issue, files, diags);
   return { diags, deltas, docsOnly, quick };
 }
 
@@ -2123,19 +2466,44 @@ function markdownTable(section) {
 function parseTasks(task) {
   const majors = [];
   let current = null;
+  let currentMinor = null;
   for (const line of task.split("\n")) {
     const major = /^- \[([ xX])\] (\d+)\.\s+(.*)$/.exec(line);
     if (major) {
-      current = { id: Number(major[2]), done: major[1].toLowerCase() === "x", title: major[3], depends: [], requirements: [] };
+      current = { id: Number(major[2]), done: major[1].toLowerCase() === "x", title: major[3], depends: [], requirements: [], minors: [] };
       majors.push(current);
+      currentMinor = null;
+      continue;
+    }
+    const minor = /^\s+- (\d+\.\d+)\s/.exec(line);
+    if (minor && current) {
+      currentMinor = { id: minor[1], requirements: [] };
+      current.minors.push(currentMinor);
       continue;
     }
     const depends = /^\s+- Depends on:\s*(.+)$/.exec(line);
     if (depends && current) current.depends = depends[1].split(",").map((item) => Number(item.trim())).filter((item) => !Number.isNaN(item));
     const req = /^\s+- Requirements:\s*(.+)$/.exec(line);
-    if (req && current) current.requirements.push(...req[1].split(",").map((item) => item.trim()).filter(Boolean));
+    if (req && current) {
+      const ids = req[1].split(",").map((item) => item.trim()).filter(Boolean);
+      if (currentMinor) currentMinor.requirements.push(...ids);
+      else current.requirements.push(...ids);
+    }
   }
   return majors;
+}
+
+function isManualMajor(title) {
+  return /manual\s+verification/i.test(title.replace(/\s*\(P\)\s*$/i, "").trim());
+}
+
+function validateDesignMechanical(files, config, issue, diags) {
+  const section = sectionText(files.design, "Requirements Traceability");
+  if (/^\s*none\s*$/i.test(section.trim())) return;
+  const strategy = sectionText(files.design, "Testing Strategy");
+  if (!/\|[^|\n]*Test Level[^|\n]*\|/i.test(strategy)) {
+    diags.push(diag(`${config.docsDir}/issues/${issue}/design.md`, 1, "DESIGN_TESTING", "Testing Strategy needs a table with a Test Level column"));
+  }
 }
 
 function validateTasks(files, config, issue, diags) {
@@ -2145,11 +2513,26 @@ function validateTasks(files, config, issue, diags) {
     for (const dep of major.depends) {
       if (!ids.has(dep) || dep >= major.id) diags.push(diag(`${config.docsDir}/issues/${issue}/task.md`, 1, "TASK_DEPENDS", `Task ${major.id} depends on ${dep}, which must be a smaller existing task`));
     }
+    if (major.minors.length && (major.minors.length < 2 || major.minors.length > 6)) {
+      diags.push(diag(`${config.docsDir}/issues/${issue}/task.md`, 1, "TASK_MINOR_COUNT", `Task ${major.id} needs 2 to 6 minor items, found ${major.minors.length}`));
+    }
+  }
+  const manual = majors.filter((item) => isManualMajor(item.title));
+  if (manual.length && manual.some((item) => item.id !== Math.max(...majors.map((entry) => entry.id)))) {
+    diags.push(diag(`${config.docsDir}/issues/${issue}/task.md`, 1, "TASK_MANUAL_ORDER", "Manual verification must be the last major task"));
   }
   if (files.traceRows) {
-    const mentioned = new Set(majors.flatMap((item) => item.requirements));
+    const mentioned = new Set(majors.flatMap((item) => [...item.requirements, ...item.minors.flatMap((minor) => minor.requirements)]));
     for (const row of files.traceRows) if (!mentioned.has(row[0])) diags.push(diag(`${config.docsDir}/issues/${issue}/task.md`, 1, "TASK_REQUIREMENTS", `${row[0]} is missing from task requirements`));
     for (const id of mentioned) if (!files.traceRows.some((row) => row[0] === id)) diags.push(diag(`${config.docsDir}/issues/${issue}/task.md`, 1, "TASK_REQUIREMENTS", `${id} is not in Requirements Traceability`));
+    for (const major of majors) {
+      if (isManualMajor(major.title)) continue;
+      for (const minor of major.minors) {
+        if (!minor.requirements.length) {
+          diags.push(diag(`${config.docsDir}/issues/${issue}/task.md`, 1, "TASK_MINOR_REQUIREMENTS", `Minor ${minor.id} needs Requirements: <ids>, or move the check into a Manual verification major`));
+        }
+      }
+    }
   }
 }
 
@@ -2171,6 +2554,42 @@ function validateResearch(research, delta, diags, config, issue) {
   for (const id of adrFromConclusions) if (!adrFromDelta.has(id)) diags.push(diag(`${config.docsDir}/issues/${issue}/research.md`, 1, "RESEARCH", `${id} is missing from the ADR delta`));
 }
 
+function indexCommand(config) {
+  const script = path.posix.join((config?.skillsDir || [".agents"])[0], "skills/sdd-scripts/sdd.mjs");
+  const runtime = config?.runtime === "bun" ? "bun" : "node";
+  return `${runtime} ${script} index`;
+}
+
+function ensureLessonsIndexOnClose(root, config) {
+  const docsDir = kdir(config);
+  const indexAbs = path.join(root, docsDir, "lessons", "index.md");
+  if (fs.existsSync(indexAbs)) return;
+  fs.mkdirSync(path.dirname(indexAbs), { recursive: true });
+  fs.writeFileSync(indexAbs, "# Lessons\n\nWhat went wrong in past work and which policy prevents a repeat.\n");
+}
+
+function healStaleIndexes(root, config, tree, notes) {
+  const docsDir = kdir(config);
+  const fresh = cloneTree(tree);
+  regenerateIndexes(fresh, docsDir);
+  let stale = false;
+  let lessonsIndexHealed = false;
+  const lessonsIndexRel = `${docsDir}/lessons/index.md`;
+  for (const [rel, value] of fresh) {
+    if (!rel.endsWith("/index.md") && rel !== `${docsDir}/index.md`) continue;
+    if (tree.get(rel) !== value) {
+      stale = true;
+      if (rel === lessonsIndexRel) lessonsIndexHealed = true;
+    }
+  }
+  if (!stale) return tree;
+  const before = cloneTree(tree);
+  writeTree(root, before, fresh);
+  if (lessonsIndexHealed && notes) {
+    notes.push(diag(lessonsIndexRel, 1, "LESSONS_INDEX_REGEN", "Regenerated lessons/index.md to match lesson pages", { note: true }));
+  }
+  return loadTree(root, docsDir);
+}
 function validateClose(root, config, issue, files, docsOnly, quick, diags) {
   if (docsOnly) {
     if (/^- \[ \]\s+Q\d+:/m.test(files.requirements)) diags.push(diag(`${config.docsDir}/issues/${issue}/requirements.md`, 1, "OPEN_QUESTIONS", "Resolve open questions before close"));
@@ -2179,6 +2598,13 @@ function validateClose(root, config, issue, files, docsOnly, quick, diags) {
   const majors = files.task ? parseTasks(files.task) : [];
   if (!quick && !files.design) diags.push(diag(`${config.docsDir}/issues/${issue}/design.md`, 1, "CLOSE_TASKS", "design.md is required before close"));
   if (!files.task || majors.some((item) => !item.done)) diags.push(diag(`${config.docsDir}/issues/${issue}/task.md`, 1, "CLOSE_TASKS", "Every major task must be checked"));
+  ensureLessonsIndexOnClose(root, config);
+  const knowledge = loadTree(root, kdir(config));
+  validateCloseLessons(config, issue, files, knowledge, diags, kdir(config));
+  validateCloseTreeChecks(root, config, issue, diags);
+}
+
+function validateCloseTreeChecks(root, config, issue, diags) {
   const map = loadTree(root, kdir(config));
   const tokens = issueTokens(issue);
   for (const [rel, value] of map) {
@@ -2198,7 +2624,7 @@ function validateClose(root, config, issue, files, docsOnly, quick, diags) {
 }
 
 function codePaths(root, config) {
-  const listed = git(root, ["ls-files", "-z"]);
+  const listed = git(root, ["ls-files", "-z", "--cached", "--others", "--exclude-standard"]);
   if (listed.status !== 0) return [];
   const skipped = [config.docsDir, ...(config.skillsDir || []).map((dir) => `${dir}/skills`)].map((dir) => `${dir.replace(/\/+$/, "")}/`);
   return listed.stdout.split("\0").filter((rel) => rel && !skipped.some((prefix) => rel.startsWith(prefix)));
@@ -2230,20 +2656,25 @@ function loadCodeFiles(root, config) {
 }
 
 function output(diags, format) {
-  if (format === "json") return `${JSON.stringify({ ok: diags.length === 0, diagnostics: diags }, null, 2)}\n`;
+  if (format === "json") {
+    const errors = diags.filter((item) => !item.note);
+    const notes = diags.filter((item) => item.note);
+    return `${JSON.stringify({ ok: errors.length === 0, diagnostics: errors, notes }, null, 2)}\n`;
+  }
   const text = formatDiagnostics(diags);
   const details = diags.filter((item) => item.detail).map((item) => item.detail).join("\n");
   return `${[text, details].filter(Boolean).join("\n")}${text || details ? "\n" : ""}`;
 }
 
 function exitCode(diags) {
-  if (!diags.length) return 0;
+  const errors = diags.filter((item) => !item.note);
+  if (!errors.length) return 0;
   const fatal = new Set(["FORMAT_VERSION", "SETUP_CONFIG_MISSING", "SETUP_SKELETON_MISSING", "USAGE", "ISSUE_NOT_FOUND"]);
-  return diags.some((item) => fatal.has(item.rule)) ? 2 : 1;
+  return errors.some((item) => fatal.has(item.rule)) ? 2 : 1;
 }
 
 function parseScriptArgs(argv) {
-  const opts = { _: [], issue: "", scope: "", stage: "", format: "text", base: "", codes: [] };
+  const opts = { _: [], issue: "", scope: "", stage: "", format: "text", base: "", codes: [], allowMissing: false, all: false };
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
     if (arg === "--issue") opts.issue = argv[++index] || "";
@@ -2252,6 +2683,8 @@ function parseScriptArgs(argv) {
     else if (arg === "--format") opts.format = argv[++index] || "text";
     else if (arg === "--base") opts.base = argv[++index] || "";
     else if (arg === "--code") opts.codes.push(argv[++index] || "");
+    else if (arg === "--allow-missing") opts.allowMissing = true;
+    else if (arg === "--all") opts.all = true;
     else if (arg.startsWith("--")) opts.unknown = arg;
     else opts._.push(arg);
   }
@@ -2265,8 +2698,8 @@ function runCommand(start, argv) {
   }
   const opts = parseScriptArgs(argv);
   const command = opts._[0] || "";
-  if (!command || opts.unknown || !["check", "stamp", "apply", "renumber", "index"].includes(command)) {
-    return { code: 2, stdout: "Usage: sdd.mjs check|stamp|apply|renumber|index [options]\n", stderr: "" };
+  if (!command || opts.unknown || !["check", "stamp", "apply", "renumber", "index", "status"].includes(command)) {
+    return { code: 2, stdout: "Usage: sdd.mjs check|stamp|apply|renumber|index|status [options]\n", stderr: "" };
   }
   const root = findRoot(start);
   if (!root) return { code: 2, stdout: "", stderr: "sdd.config.json:1: USAGE Run this command inside a repository.\n" };
@@ -2283,10 +2716,143 @@ function runCommand(start, argv) {
     writeTree(root, before, tree);
     return { code: 0, stdout: "", stderr: "" };
   }
+  if (command === "status") return runStatus(root, config, opts);
   if (command === "check") return runCheck(root, config, opts);
   if (command === "stamp") return runStamp(root, config, opts);
   if (command === "apply") return runApply(root, config, opts);
   return runRenumber(root, config, opts);
+}
+
+function isTestPath(rel) {
+  return /(?:^|\/)(?:test|tests|__tests__)(?:\/|$)/.test(rel)
+    || /\.(?:test|spec)\.[cm]?[jt]sx?$/.test(rel)
+    || /_(?:test|spec)\.(?:py|go|rb)$/.test(rel);
+}
+
+function loadTestFileTexts(root, config) {
+  const files = new Map();
+  for (const rel of codePaths(root, config)) {
+    if (!isTestPath(rel)) continue;
+    const abs = path.join(root, rel);
+    if (!fs.existsSync(abs) || fs.statSync(abs).isDirectory()) continue;
+    const buffer = fs.readFileSync(abs);
+    if (buffer.includes(0)) continue;
+    files.set(rel, buffer.toString("utf8"));
+  }
+  return files;
+}
+
+function idNeedsAutomatedTest(levels) {
+  const parsed = levels.split(",").map((item) => item.trim()).filter(Boolean);
+  if (!parsed.length) return true;
+  return parsed.some((level) => AUTO_TEST_LEVELS.includes(level));
+}
+
+function validateImpl(root, config, issue, files, diags) {
+  if (!files.design || !files.task) {
+    diags.push(diag(`${config.docsDir}/issues/${issue}/task.md`, 1, "IMPL_DOCS", "design.md and task.md are required before impl verification"));
+    return;
+  }
+  const majors = parseTasks(files.task);
+  for (const major of majors) {
+    if (major.done || isManualMajor(major.title)) continue;
+    diags.push(diag(`${config.docsDir}/issues/${issue}/task.md`, 1, "IMPL_TASK_OPEN", `Task ${major.id} ${major.title.replace(/\s*\(P\)\s*$/i, "").trim()} is not checked`));
+  }
+  for (const major of majors.filter((item) => isManualMajor(item.title) && !item.done)) {
+    diags.push(diag(`${config.docsDir}/issues/${issue}/task.md`, 1, "IMPL_HUMAN_PENDING", `Task ${major.id} awaits human verification`, { note: true }));
+  }
+  const section = sectionText(files.design, "Requirements Traceability");
+  if (/^\s*none\s*$/i.test(section.trim())) return;
+  const rows = markdownTable(section);
+  const tests = loadTestFileTexts(root, config);
+  const testBlob = [...tests.values()].join("\n");
+  for (const row of rows) {
+    if (!idNeedsAutomatedTest(row[2] || "")) continue;
+    const id = row[0];
+    const pattern = new RegExp(`\\b${id.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`);
+    if (!pattern.test(testBlob)) {
+      diags.push(diag(`${config.docsDir}/issues/${issue}/design.md`, 1, "IMPL_TEST_MISSING", `${id} has no reference in automated test files`));
+    }
+  }
+}
+
+function runTestCommand(root, config, diags) {
+  const command = config.testCommand;
+  if (!command || typeof command !== "string" || !command.trim()) return;
+  const shell = process.platform === "win32" ? "cmd.exe" : "/bin/sh";
+  const args = process.platform === "win32" ? ["/d", "/s", "/c", command] : ["-c", command];
+  const result = spawnSync(shell, args, { cwd: root, encoding: "utf8" });
+  if ((result.status ?? 1) !== 0) {
+    const detail = `${result.stdout || ""}${result.stderr || ""}`.trim();
+    diags.push(diag("sdd.config.json", 1, "IMPL_TEST_COMMAND", `testCommand failed with exit ${result.status ?? 1}`, detail ? { detail } : {}));
+  }
+}
+
+function proposalQuick(proposal) {
+  const caps = /^-\s+Capabilities:\s*(.+)$/m.exec(proposal)?.[1]?.trim();
+  const steering = /^-\s+Steering:\s*(.+)$/m.exec(proposal)?.[1]?.trim();
+  const decisions = /^-\s+Decisions:\s*(.+)$/m.exec(proposal)?.[1]?.trim();
+  return caps === "none" && steering === "none" && decisions === "none";
+}
+
+function issueStatus(root, config, issue) {
+  const branch = branchName(root);
+  const dir = issueDir(root, config, issue);
+  const onBranch = branch === issue;
+  if (!fs.existsSync(dir)) {
+    return {
+      issue,
+      onBranch,
+      phase: onBranch ? "re-close" : "missing",
+      nextSkill: onBranch ? "sdd-close" : "",
+      detail: onBranch ? "Issue directory removed; use Re-close in sdd-close" : "Issue directory not found",
+    };
+  }
+  const files = readIssue(root, config, issue);
+  const type = proposalType(files.proposal);
+  const quick = !files.requirements && !files.design && !!files.task;
+  if (!files.proposal) return { issue, onBranch, phase: "init", nextSkill: "sdd-init", detail: "proposal.md is missing" };
+  if (quick) return { issue, onBranch, phase: "quick", nextSkill: "sdd-close", detail: "Quick issue ready to close" };
+  if (type === "docs" && !files.requirements) return { issue, onBranch, phase: "reverse", nextSkill: "sdd-reverse", detail: "Docs-only reverse issue" };
+  if (!files.requirements) {
+    return { issue, onBranch, phase: "proposal", nextSkill: proposalQuick(files.proposal) ? "sdd-quick" : "sdd-req", detail: "Proposal written" };
+  }
+  if (!files.design) return { issue, onBranch, phase: "requirements", nextSkill: "sdd-design", detail: "requirements.md written" };
+  if (!files.task) return { issue, onBranch, phase: "design", nextSkill: "sdd-task", detail: "design.md written" };
+  const majors = parseTasks(files.task);
+  const open = majors.filter((item) => !item.done && !isManualMajor(item.title));
+  const pendingHuman = majors.filter((item) => !item.done && isManualMajor(item.title));
+  if (open.length) {
+    return { issue, onBranch, phase: "implementation", nextSkill: "sdd-impl", detail: `Open tasks: ${open.map((item) => item.id).join(", ")}` };
+  }
+  if (pendingHuman.length) {
+    return { issue, onBranch, phase: "manual", nextSkill: "sdd-impl", detail: `Human verification pending: ${pendingHuman.map((item) => item.id).join(", ")}` };
+  }
+  return { issue, onBranch, phase: "ready", nextSkill: "sdd-close", detail: "Ready to close" };
+}
+
+function listIssues(root, config) {
+  const dir = path.join(root, config.docsDir, "issues");
+  if (!fs.existsSync(dir)) return [];
+  return fs.readdirSync(dir, { withFileTypes: true }).filter((entry) => entry.isDirectory()).map((entry) => entry.name).sort();
+}
+
+function runStatus(root, config, opts) {
+  const setup = setupDiags(root, config);
+  if (setup.some((item) => item.rule !== "SETUP_STEERING_MISSING")) {
+    return { code: exitCode(setup), stdout: output(setup, opts.format), stderr: "" };
+  }
+  const branch = branchName(root);
+  let issues = [];
+  if (opts.issue) issues = [opts.issue];
+  else if (opts.all) issues = listIssues(root, config);
+  else if (branch && branch !== config.baseBranch) issues = [branch];
+  else issues = listIssues(root, config);
+  const rows = issues.map((issue) => issueStatus(root, config, issue));
+  if (opts.format === "json") return { code: 0, stdout: `${JSON.stringify({ branch, issues: rows }, null, 2)}\n`, stderr: "" };
+  const lines = rows.map((row) => `${row.issue}: ${row.phase} -> /${row.nextSkill}${row.detail ? ` (${row.detail})` : ""}`);
+  if (branch) lines.unshift(`branch: ${branch}`);
+  return { code: 0, stdout: `${lines.join("\n")}\n`, stderr: "" };
 }
 
 function runCheck(root, config, opts) {
@@ -2298,29 +2864,55 @@ function runCheck(root, config, opts) {
       if (relevant.some((item) => item.rule !== "SETUP_STEERING_MISSING")) return { code: exitCode(relevant.filter((item) => item.rule !== "SETUP_STEERING_MISSING")), stdout: output(relevant.filter((item) => item.rule !== "SETUP_STEERING_MISSING"), opts.format), stderr: "" };
     }
   }
-  if (setup.some((item) => item.rule === "SETUP_STEERING_MISSING") && opts.scope !== "setup") {
+  if (setup.some((item) => item.rule === "SETUP_STEERING_MISSING") && opts.scope !== "setup" && opts.scope !== "knowledge") {
     return { code: 1, stdout: output(setup, opts.format), stderr: "" };
   }
+  if (opts.scope === "knowledge") {
+    if (setup.some((item) => item.rule === "SETUP_STEERING_MISSING")) {
+      return { code: 1, stdout: output(setup, opts.format), stderr: "" };
+    }
+    const blocking = setup.filter((item) => item.rule !== "SETUP_STEERING_MISSING");
+    if (blocking.length) {
+      return { code: exitCode(blocking), stdout: checkOutput(blocking, opts.format, "knowledge"), stderr: "" };
+    }
+    const healNotes = [];
+    const tree = healStaleIndexes(root, config, loadTree(root, kdir(config)), healNotes);
+    const diags = [...healNotes, ...validateTree(tree, kdir(config), { lang: config.lang || "en", root, stage: opts.stage, config })];
+    return { code: exitCode(diags), stdout: checkOutput(diags, opts.format, "knowledge"), stderr: "" };
+  }
   const issue = resolveIssue(root, config, opts.issue);
-  if (opts.issue && !fs.existsSync(issueDir(root, config, opts.issue))) {
+  const issuePresent = issue && fs.existsSync(issueDir(root, config, issue));
+  if (opts.issue && !issuePresent && !opts.allowMissing) {
     const diags = [diag(`${config.docsDir}/issues/${opts.issue}`, 1, "ISSUE_NOT_FOUND", "The issue directory does not exist")];
     return { code: 2, stdout: output(diags, opts.format), stderr: "" };
   }
-  const tree = loadTree(root, kdir(config));
-  let diags = validateTree(tree, kdir(config), { lang: config.lang || "en", root, stage: opts.stage });
-  if (issue && fs.existsSync(issueDir(root, config, issue))) {
+  const healNotes = [];
+  const tree = healStaleIndexes(root, config, loadTree(root, kdir(config)), healNotes);
+  let diags = [...healNotes, ...validateTree(tree, kdir(config), { lang: config.lang || "en", root, stage: opts.stage, config })];
+  if (issuePresent) {
     const issueResult = staticIssueDiags(root, config, issue, opts.stage);
     diags = diags.concat(issueResult.diags);
     const simulated = simulate(tree, kdir(config), issueResult.deltas, issue, { lang: config.lang || "en", root });
     diags = diags.concat(simulated.diags.filter((item) => !diags.some((existing) => existing.rule === item.rule && existing.path === item.path && existing.message === item.message)));
-  } else if (issue && !fs.existsSync(issueDir(root, config, issue))) {
-    diags.push(diag(`${config.docsDir}/issues/${issue}`, 1, "ISSUE_NOT_FOUND", "The branch has no matching issue directory"));
+  } else if (issue && !issuePresent) {
+    if (!opts.allowMissing) {
+      diags.push(diag(`${config.docsDir}/issues/${issue}`, 1, "ISSUE_NOT_FOUND", "The branch has no matching issue directory"));
+    } else if (opts.stage === "close") {
+      validateCloseTreeChecks(root, config, issue, diags);
+    }
   }
-  return { code: exitCode(diags), stdout: checkOutput(diags, opts.format, issue ? `issue ${issue}` : "tree"), stderr: "" };
+  if (opts.stage === "impl" && issuePresent) runTestCommand(root, config, diags);
+  return { code: exitCode(diags), stdout: checkOutput(diags, opts.format, issue && (issuePresent || !opts.allowMissing) ? `issue ${issue}` : "tree"), stderr: "" };
 }
 
 function checkOutput(diags, format, scope) {
-  if (format === "text" && !diags.length) return `ok: ${scope}\n`;
+  const errors = diags.filter((item) => !item.note);
+  if (format === "text" && !errors.length) {
+    const notes = diags.filter((item) => item.note);
+    const base = `ok: ${scope}\n`;
+    if (!notes.length) return base;
+    return `${base}${formatDiagnostics(notes)}\n`;
+  }
   return output(diags, format);
 }
 

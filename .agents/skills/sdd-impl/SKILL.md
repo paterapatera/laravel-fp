@@ -20,4 +20,17 @@ Run `bun .agents/skills/sdd-scripts/sdd.mjs check --scope setup` first. Read the
 
 Refer to requirement ids only in test names and comments. Commit the checked work with the proposal Impact type. When the feature name starts with a tracker key, use that key as the commit scope and write the description in `ja`. Stage the issue directory and the files this implementation changed. Do not use `git add -A` or `git add .`.
 
+Before reporting completion, run `bun .agents/skills/sdd-scripts/sdd.mjs check --stage impl --issue <feature>`. It runs `testCommand` from `sdd.config.json` when set, checks that automated test files reference each non-Manual traceability id, and reports unchecked implementation tasks separately from human Manual verification (notes, not failures). Do not check Manual verification majors automatically.
+
 If steering does not match the code and the difference is outside this issue, finish the implementation and recommend `/sdd-steering`.
+
+## Issue feedback (`feedback.md`)
+
+Append to `docs/issues/<current-branch>/feedback.md` (create with `# Feedback` if missing). One entry per event: `## YYYY-MM-DD sdd-impl — <kind>` then a short summary. Commit `feedback.md` on the branch when you append. Do not read `knowledge/lessons/`.
+
+Record when:
+
+- A major stops after the third test failure: kind `test-stop`.
+- You stop because the design cannot be implemented as written: kind `design-blocked`.
+- Steering does not match the code and you recommend `/sdd-steering`: kind `steering-drift`.
+- The same `check` diagnostic code appears again on this issue: kind `repeat-check` (include the code and count).

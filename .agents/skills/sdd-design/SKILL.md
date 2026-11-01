@@ -27,6 +27,26 @@ Inside a steering section, write sub-headings two levels deeper than in the perm
 
 `Runs on` is Local, CI, Staging, or Human. Contract tests check the shape without the counterpart running. Performance tests measure latency, throughput, or error rate. Security tests include SAST, DAST, or vulnerability checks.
 
+## Review
+
+Before Finish or handing off to `/sdd-task`, reread both files against this list yourself. Fix each failure. Do not treat this list as a substitute for the person's Manual verification later.
+
+- Every requirements delta id appears in Requirements Traceability with a test level that matches how it will be verified (Manual only when a person must look).
+- No two traced ids share the same obligation in conflicting ways; MODIFIED text matches the requirements delta.
+- Testing Strategy includes a table with Test Level and Runs on when traceability is not `none`.
+- Components and Interfaces match the traceability components and are testable at the chosen levels.
+- Steering deltas follow the rationale rules above.
+
 ## Finish
 
 Run stamp and check again after every edit. Commit `research.md` and `design.md` together as one `docs` commit. Stage only this issue directory.
+
+## Issue feedback (`feedback.md`)
+
+Append to `docs/issues/<current-branch>/feedback.md` (create with `# Feedback` if missing). One entry per event: `## YYYY-MM-DD sdd-design — <kind>` then a short summary. Commit `feedback.md` on the branch when you append (with the related doc commit or right after). Do not read `knowledge/lessons/`.
+
+Record when:
+
+- The user answers with something other than the offered options: kind `off-script-answer` (question, options shown, and the answer).
+- The user points out missing content during review or confirmation: kind `review-gap` (what was missing).
+- The same `check` diagnostic code appears again on this issue: kind `repeat-check` (include the code and count).

@@ -30,9 +30,11 @@ Frontmatter is `type: Steering`, `title`, `description`, and lowercase kebab-cas
 
 Compare steering with the code: manifests and commands for `tech.md`, directories and imports for `structure.md`, module dependencies and deploy config for `architecture.md`, and matching code for topic files. Report `product.md` and `glossary.md` differences without editing them. Present each difference as current text, code fact, and proposed text. The user accepts, rejects, or defers one item at a time. Apply only accepted items.
 
+When durable specs already exist under `docs/knowledge/specs/`, also cross-check requirement ids with the code: list every `REQ|IF|DATA|NFR-<CODE>-<n>` in those specs, search application and test code (skip `docs` and skill directories) for each id in comments, test names, and string literals, and report ids with no such reference and references to ids that are not in specs. Use the same resync report shape (current text, code fact, proposed text) or a short chat summary when no steering edit follows; do not add a separate gap file or new durable document. When the user is ready to record missing specs or fix orphan references, recommend `/sdd-init` and then `/sdd-reverse` or `/sdd-req` per item, following init’s next-skill rules.
+
 If code contradicts an Accepted ADR, report `ADR-<n>` and do not edit steering. Report an ADR candidate without creating an ADR. Append accepted edits to `steering/log.md` as `* **Resync**: ...` with no issue name. Do not record rejections.
 
-After either mode, run `bun .agents/skills/sdd-scripts/sdd.mjs index` and `bun .agents/skills/sdd-scripts/sdd.mjs check`.
+After either mode, run `bun .agents/skills/sdd-scripts/sdd.mjs check` (it refreshes stale `index.md` files before other tree rules). Run `bun .agents/skills/sdd-scripts/sdd.mjs index` only when you need to rebuild indexes without a full tree check.
 
 ## Other skills
 
