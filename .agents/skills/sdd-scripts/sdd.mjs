@@ -345,18 +345,14 @@ function parseFeedbackEntries(feedbackText) {
   let current = null;
   for (let index = 0; index < lines.length; index += 1) {
     const match = /^## (.+)$/.exec(lines[index]);
-    if (!match) continue;
-    if (current) entries.push(current);
-    current = { heading: match[1].trim(), line: index + 1, lines: [] };
-  }
-  if (current) {
-    for (let index = current.line; index < lines.length; index += 1) {
-      if (/^## /.test(lines[index])) break;
-      if (index === current.line - 1) continue;
-      current.lines.push(lines[index]);
+    if (match) {
+      if (current) entries.push(current);
+      current = { heading: match[1].trim(), line: index + 1, lines: [] };
+      continue;
     }
-    entries.push(current);
+    if (current) current.lines.push(lines[index]);
   }
+  if (current) entries.push(current);
   return entries;
 }
 
