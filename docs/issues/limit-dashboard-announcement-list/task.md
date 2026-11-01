@@ -1,6 +1,6 @@
 # Tasks
 
-- [ ] 1. ダッシュボードの公開対象を先頭10件に限る (P)
+- [x] 1. ダッシュボードの公開対象を先頭10件に限る (P)
   - 1.1 `DashboardController::index` で `AnnouncementCatalog::visible` の成功値から先頭10件だけを `dashboard.index` へ渡す。10は設定にせず、`visible` の全件返却と `findVisible` は変えない
     - Requirements: REQ-ANN-NEW-1, REQ-ANN-NEW-2, NFR-ANN-NEW-1
   - 1.2 渡された公開対象のタイトルと要約を渡し順に描き、0件のときは「お知らせはありません。」のままにする
