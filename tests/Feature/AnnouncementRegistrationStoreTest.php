@@ -172,7 +172,7 @@ test('REQ-ANR-18 成功画面を再表示しても、その題名の下書きは
     expect(Announcement::query()->where('title', '再送されない題名')->count())->toBe(1);
 });
 
-test('REQ-ANR-13 REQ-ANR-NEW-3 REQ-ANR-NEW-5 REQ-ANR-NEW-7 期間の不足と逆転と不正を分けて示し、入力した文字を残す', function () {
+test('REQ-ANR-13 REQ-ANR-22 REQ-ANR-24 REQ-ANR-26 期間の不足と逆転と不正を分けて示し、入力した文字を残す', function () {
     $admin = User::factory()->create(['admin' => true]);
 
     $this->actingAs($admin)->followingRedirects()->post(route('announcements.register.store'), [

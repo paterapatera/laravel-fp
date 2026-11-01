@@ -1,5 +1,20 @@
 # Update Log
 
+
+## 2026-11-01
+* **Modified**: Scope in [お知らせの登録](/specs/announcements/register/)
+* **Modified**: Definitions in [お知らせの登録](/specs/announcements/register/)
+* **Modified**: REQ-ANR-4 - 空の開始と終了の入力も示す。
+* **Modified**: REQ-ANR-13 - 期間の拒否を示している間も、開始と終了を含めて入力済みの文字を残す。
+* **Modified**: REQ-ANR-14 - 期間が両方空か、開始と終了がどちらも時までの日時で終了が開始以降のときだけ追加する。
+* **Modified**: REQ-ANR-15 - 両方空の成功だけ開始と終了を空にする。妥当な期間は保存し、不正な期間は追加しない。
+* **Added**: REQ-ANR-20 in [お知らせの登録](/specs/announcements/register/)
+* **Added**: REQ-ANR-21 in [お知らせの登録](/specs/announcements/register/)
+* **Added**: REQ-ANR-22 in [お知らせの登録](/specs/announcements/register/)
+* **Added**: REQ-ANR-23 in [お知らせの登録](/specs/announcements/register/)
+* **Added**: REQ-ANR-24 in [お知らせの登録](/specs/announcements/register/)
+* **Added**: REQ-ANR-25 in [お知らせの登録](/specs/announcements/register/)
+* **Added**: REQ-ANR-26 in [お知らせの登録](/specs/announcements/register/)
 ## 2026-10-28
 * **Added**: /specs/announcements/register
 * **Modified**: REQ-ANN-10 - 作成の入口はお知らせの登録へ移し、一覧と詳細では編集と削除を出さない。

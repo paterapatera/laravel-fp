@@ -48,7 +48,7 @@ test('REQ-ANR-11 空白以外の文字は前後の空白もマークアップも
         ->and(Announcement::query()->count())->toBe(1);
 });
 
-test('REQ-ANR-14 REQ-ANR-15 REQ-ANR-NEW-1 空の期間は空のまま、終了が開始以降の時は UTC の下書きを一件残す', function () {
+test('REQ-ANR-14 REQ-ANR-15 REQ-ANR-20 空の期間は空のまま、終了が開始以降の時は UTC の下書きを一件残す', function () {
     $registrar = new AnnouncementRegistrar;
 
     $empty = $registrar->register('題名', '要約', '本文', '   ', "\n");
@@ -83,7 +83,7 @@ test('REQ-ANR-14 REQ-ANR-15 REQ-ANR-NEW-1 空の期間は空のまま、終了�
         ->and($edgesDraft->ends_at?->utc()->format('Y-m-d H:i:s'))->toBe('2026-11-01 23:00:00');
 });
 
-test('REQ-ANR-NEW-2 REQ-ANR-NEW-4 REQ-ANR-NEW-6 片方だけ、逆転、時でない期間は追加しない', function () {
+test('REQ-ANR-21 REQ-ANR-23 REQ-ANR-25 片方だけ、逆転、時でない期間は追加しない', function () {
     $registrar = new AnnouncementRegistrar;
 
     $missingEnd = $registrar->register('題名', '要約', '本文', '2026-11-01 10', '');
