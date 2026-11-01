@@ -54,6 +54,36 @@
                     @enderror
                 </label>
 
+                <label class="flex flex-col gap-2 text-sm">
+                    <span>開始</span>
+                    <input
+                        type="text"
+                        name="starts_at"
+                        value="{{ old('starts_at', '') }}"
+                        class="border border-[#19140035] dark:border-[#3E3E3A] bg-white dark:bg-[#0a0a0a] rounded-sm px-4 py-2"
+                    >
+                    @error('starts_at')
+                        <span class="text-[#f53003] dark:text-[#FF4433]">{{ $message }}</span>
+                    @enderror
+                </label>
+
+                <label class="flex flex-col gap-2 text-sm">
+                    <span>終了</span>
+                    <input
+                        type="text"
+                        name="ends_at"
+                        value="{{ old('ends_at', '') }}"
+                        class="border border-[#19140035] dark:border-[#3E3E3A] bg-white dark:bg-[#0a0a0a] rounded-sm px-4 py-2"
+                    >
+                    @error('ends_at')
+                        <span class="text-[#f53003] dark:text-[#FF4433]">{{ $message }}</span>
+                    @enderror
+                </label>
+
+                @error('window')
+                    <span class="text-[#f53003] dark:text-[#FF4433] text-sm">{{ $message }}</span>
+                @enderror
+
                 <button
                     type="submit"
                     class="inline-block px-5 py-1.5 bg-[#1b1b18] dark:bg-[#eeeeec] border border-black dark:border-[#eeeeec] rounded-sm text-sm leading-normal text-white dark:text-[#1C1C1A]"

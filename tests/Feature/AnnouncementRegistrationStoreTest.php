@@ -63,8 +63,6 @@ test('REQ-ANR-3 REQ-ANR-14 REQ-ANR-15 REQ-ANR-16 REQ-ANR-17 REQ-ANR-19 成功す
         'title' => $title,
         'summary' => '要約だけUNIQUE',
         'body' => '本文だけUNIQUE',
-        'starts_at' => '2026-02-02 00:00:00',
-        'ends_at' => '2026-01-01 00:00:00',
         'status' => AnnouncementStatus::Published->value,
         'admin' => '0',
     ]);
@@ -172,4 +170,99 @@ test('REQ-ANR-18 成功画面を再表示しても、その題名の下書きは
     $this->get(route('announcements.register.created'))->assertOk();
 
     expect(Announcement::query()->where('title', '再送されない題名')->count())->toBe(1);
+});
+
+test('REQ-ANR-13 REQ-ANR-NEW-3 REQ-ANR-NEW-5 REQ-ANR-NEW-7 期間の不足と逆転と不正を分けて示し、入力した文字を残す', function () {
+    $admin = User::factory()->create(['admin' => true]);
+
+    $this->actingAs($admin)->followingRedirects()->post(route('announcements.register.store'), [
+        'title' => '<b>注意</b>',
+        'summary' => '要約',
+        'body' => '本文',
+        'starts_at' => '2026-11-01 10',
+        'ends_at' => '',
+    ])->assertOk()
+        ->assertSee('終了がありません')
+        ->assertDontSee('開始がありません')
+        ->assertDontSee('終了が開始より前です')
+        ->assertSee('value="2026-11-01 10"', false)
+        ->assertSee('&lt;b&gt;注意&lt;/b&gt;', false);
+
+    $this->followingRedirects()->post(route('announcements.register.store'), [
+        'title' => '<b>注意</b>',
+        'summary' => '要約',
+        'body' => '本文',
+        'starts_at' => '2026-11-02 10',
+        'ends_at' => '2026-11-01 10',
+    ])->assertOk()
+        ->assertSee('終了が開始より前です')
+        ->assertDontSee('開始がありません')
+        ->assertDontSee('終了がありません')
+        ->assertSee('value="2026-11-02 10"', false)
+        ->assertSee('value="2026-11-01 10"', false)
+        ->assertSee('&lt;b&gt;注意&lt;/b&gt;', false);
+
+    $this->followingRedirects()->post(route('announcements.register.store'), [
+        'title' => '',
+        'summary' => '要約',
+        'body' => '本文',
+        'starts_at' => '2026-11-02 10',
+        'ends_at' => '2026-11-01 10',
+    ])->assertOk()
+        ->assertSee('題名がありません')
+        ->assertSee('終了が開始より前です');
+
+    $this->followingRedirects()->post(route('announcements.register.store'), [
+        'title' => '題名',
+        'summary' => '要約',
+        'body' => '本文',
+        'starts_at' => '2026-11-01 10:00',
+        'ends_at' => '2026-11-02 18',
+    ])->assertOk()
+        ->assertSee('開始が日時ではありません')
+        ->assertDontSee('終了が日時ではありません')
+        ->assertDontSee('終了が開始より前です')
+        ->assertSee('value="2026-11-01 10:00"', false);
+
+    $this->followingRedirects()->post(route('announcements.register.store'), [
+        'title' => '題名',
+        'summary' => '要約',
+        'body' => '本文',
+        'starts_at' => '明日',
+        'ends_at' => '2026-11-01 10+09:00',
+    ])->assertOk()
+        ->assertSee('開始が日時ではありません')
+        ->assertSee('終了が日時ではありません');
+
+    $this->followingRedirects()->post(route('announcements.register.store'), [
+        'title' => '題名',
+        'summary' => '要約',
+        'body' => '本文',
+        'starts_at' => '2026-11-01',
+        'ends_at' => '2026-11-02 18',
+    ])->assertOk()
+        ->assertSee('開始が日時ではありません');
+
+    $this->followingRedirects()->post(route('announcements.register.store'), [
+        'title' => '題名',
+        'summary' => '要約',
+        'body' => '本文',
+        'starts_at' => '2026-11-01 24',
+        'ends_at' => '2026-11-02 18',
+    ])->assertOk()
+        ->assertSee('開始が日時ではありません')
+        ->assertDontSee('終了が日時ではありません')
+        ->assertSee('value="2026-11-01 24"', false);
+
+    $this->followingRedirects()->post(route('announcements.register.store'), [
+        'title' => '題名',
+        'summary' => '要約',
+        'body' => '本文',
+        'starts_at' => '',
+        'ends_at' => '明日',
+    ])->assertOk()
+        ->assertSee('開始がありません')
+        ->assertSee('終了が日時ではありません');
+
+    expect(Announcement::query()->count())->toBe(0);
 });

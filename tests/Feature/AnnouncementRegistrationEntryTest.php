@@ -58,9 +58,11 @@ test('REQ-ANR-4 管理者の登録画面は空で、保存済みの題名は出�
         ->get(route('announcements.register.create'))
         ->assertOk()
         ->assertSee('name="title"', false)
-        ->assertSee('value=""', false)
         ->assertSee('name="summary"', false)
         ->assertSee('name="body"', false)
+        ->assertSee('name="starts_at"', false)
+        ->assertSee('value=""', false)
+        ->assertSee('name="ends_at"', false)
         ->assertDontSee('保存済み題名UNIQUE')
         ->assertDontSee('href="'.route('announcements.register.create').'"', false);
 

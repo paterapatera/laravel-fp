@@ -35,7 +35,9 @@ class AnnouncementRegistrationController extends Controller
         $title = $this->text($request, 'title');
         $summary = $this->text($request, 'summary');
         $body = $this->text($request, 'body');
-        $result = $this->registrar->register($title, $summary, $body);
+        $startsAt = $this->text($request, 'starts_at');
+        $endsAt = $this->text($request, 'ends_at');
+        $result = $this->registrar->register($title, $summary, $body, $startsAt, $endsAt);
 
         if ($result->isErr()) {
             $fields = $result->error();
@@ -46,6 +48,8 @@ class AnnouncementRegistrationController extends Controller
                     'title' => $title,
                     'summary' => $summary,
                     'body' => $body,
+                    'starts_at' => $startsAt,
+                    'ends_at' => $endsAt,
                 ])
                 ->withErrors($this->messages(is_array($fields) ? $fields : []));
         }
@@ -95,16 +99,22 @@ class AnnouncementRegistrationController extends Controller
     private function messages(array $fields): array
     {
         $messages = [
-            'title' => '題名がありません',
-            'summary' => '要約がありません',
-            'body' => '本文がありません',
+            'title' => ['title', '題名がありません'],
+            'summary' => ['summary', '要約がありません'],
+            'body' => ['body', '本文がありません'],
+            'starts_at' => ['starts_at', '開始がありません'],
+            'ends_at' => ['ends_at', '終了がありません'],
+            'starts_at_invalid' => ['starts_at', '開始が日時ではありません'],
+            'ends_at_invalid' => ['ends_at', '終了が日時ではありません'],
+            'window' => ['window', '終了が開始より前です'],
         ];
 
         $errors = [];
 
         foreach ($fields as $field) {
             if (isset($messages[$field])) {
-                $errors[$field] = $messages[$field];
+                [$key, $message] = $messages[$field];
+                $errors[$key] = $message;
             }
         }
 
