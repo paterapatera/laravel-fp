@@ -342,17 +342,20 @@ function parseFeedbackEntries(feedbackText) {
   if (!feedbackText.trim()) return [];
   const entries = [];
   const lines = feedbackText.replace(/\r\n/g, "\n").split("\n");
-  let current = null;
-  for (let index = 0; index < lines.length; index += 1) {
+  let index = 0;
+  while (index < lines.length) {
     const match = /^## (.+)$/.exec(lines[index]);
-    if (match) {
-      if (current) entries.push(current);
-      current = { heading: match[1].trim(), line: index + 1, lines: [] };
+    if (!match) {
+      index += 1;
       continue;
     }
-    if (current) current.lines.push(lines[index]);
+    const heading = match[1].trim();
+    const line = index + 1;
+    const start = index + 1;
+    index += 1;
+    while (index < lines.length && !/^## /.test(lines[index])) index += 1;
+    entries.push({ heading, line, lines: lines.slice(start, index) });
   }
-  if (current) entries.push(current);
   return entries;
 }
 
@@ -368,15 +371,22 @@ function parseFixItems(taskText) {
   const fixes = [];
   if (!taskText) return fixes;
   const lines = taskText.replace(/\r\n/g, "\n").split("\n");
+  const topLevelFix = /^\s*-\s+\[[ xX]\]\s+\d+\.\s+Fix:/;
+  const taskLine = /^\s*-\s+\[[ xX]\]\s+\d+(?:\.\d+)?\.\s+/;
   for (let index = 0; index < lines.length; index += 1) {
-    if (!/^\s*-\s+\[[ xX]\]\s+\d+(?:\.\d+)?\.\s+Fix:/.test(lines[index])) continue;
+    if (!topLevelFix.test(lines[index])) continue;
     const block = [lines[index]];
+    const baseIndent = lines[index].match(/^(\s*)/)[1].length;
     for (let j = index + 1; j < lines.length; j += 1) {
-      if (/^\s*-\s+\[[ xX]\]\s+\d+\./.test(lines[j]) && !/Fix:/.test(lines[j])) break;
-      if (/^\s*-\s+\[[ xX]\]\s+\d+(?:\.\d+)?\./.test(lines[j]) && j !== index) break;
-      if (/^-\s+\[[ xX]\]\s+\d+\.\s/.test(lines[j]) && !/^\s+/.test(lines[j]) && j !== index) break;
-      block.push(lines[j]);
-      if (/^\S/.test(lines[j]) && j > index) break;
+      const line = lines[j];
+      if (topLevelFix.test(line) && j !== index) break;
+      if (!line.trim()) {
+        block.push(line);
+        continue;
+      }
+      const indent = line.match(/^(\s*)/)[1].length;
+      if (indent <= baseIndent && taskLine.test(line)) break;
+      block.push(line);
     }
     fixes.push({ line: index + 1, lines: block });
   }
@@ -416,7 +426,7 @@ function validateCloseLessons(config, issue, files, map, diags, docsDir) {
   for (const fix of fixes) {
     const disposition = fixDisposition(fix);
     if (!disposition) {
-      diags.push(diag(`${config.docsDir}/issues/${issue}/task.md`, fix.line, "LESSONS_UNPROCESSED", "Each Fix: item needs - Lessons: <slug> or - Lessons: excluded: <reason> after approval"));
+      diags.push(diag(`${config.docsDir}/issues/${issue}/task.md`, fix.line, "LESSONS_UNPROCESSED", "Each top-level Fix: major needs - Lessons: <slug> or - Lessons: excluded: <reason> after confirmation"));
       continue;
     }
     if (disposition.type === "slug") {
@@ -533,7 +543,7 @@ Append-only log for this issue. Add one \`##\` entry per event (short, plain lan
 
 Entry heading format: \`## YYYY-MM-DD <skill> — <kind>\`
 
-After the person confirms lesson records at close, add \`- Lessons: <kebab-slug>\` or \`- Lessons: excluded: <reason>\` to each entry (and under each Fix: item in task.md when used).
+After the person confirms lesson records at close, add \`- Lessons: <kebab-slug>\` or \`- Lessons: excluded: <reason>\` to each feedback entry and to each **top-level** \`N. Fix:\` major in task.md (not to nested \`N.M. Fix:\` minors).
 `;
 
 function headingNodes(markdown) {
