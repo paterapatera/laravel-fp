@@ -162,7 +162,7 @@ test('REQ-ANN-4 ダッシュボードは公開開始、作成、タイトルの�
         ->assertSeeInOrder(['作成が新しい', 'apple', 'mango', '開始が古い']);
 });
 
-test('REQ-ANN-NEW-1 NFR-ANN-NEW-1 開始が新しい公開対象の先頭10件だけを出す', function () {
+test('REQ-ANN-12 NFR-ANN-1 開始が新しい公開対象の先頭10件だけを出す', function () {
     $prefix = announcementsBeyondTheListLimit();
 
     $response = $this->actingAs(User::factory()->create())->get('/dashboard');
@@ -170,7 +170,7 @@ test('REQ-ANN-NEW-1 NFR-ANN-NEW-1 開始が新しい公開対象の先頭10件�
     assertDashboardAnnouncementPrefix($response, $prefix['shown'], $prefix['hidden'], $prefix['summaries']);
 });
 
-test('REQ-ANN-NEW-1 公開対象が10件未満ならその全件を順に出す', function () {
+test('REQ-ANN-12 公開対象が10件未満ならその全件を順に出す', function () {
     $now = now()->startOfSecond();
 
     foreach ([
@@ -194,7 +194,7 @@ test('REQ-ANN-NEW-1 公開対象が10件未満ならその全件を順に出す'
     );
 });
 
-test('REQ-ANN-NEW-1 公開対象がちょうど10件ならその全件を順に出す', function () {
+test('REQ-ANN-12 公開対象がちょうど10件ならその全件を順に出す', function () {
     $now = now()->startOfSecond();
     $shown = [];
     $summaries = [];
@@ -218,7 +218,7 @@ test('REQ-ANN-NEW-1 公開対象がちょうど10件ならその全件を順に�
     );
 });
 
-test('REQ-ANN-NEW-1 下書きは先頭10件の枠を使わない', function () {
+test('REQ-ANN-12 下書きは先頭10件の枠を使わない', function () {
     $now = now()->startOfSecond();
     $hidden = [];
 
@@ -257,7 +257,7 @@ test('REQ-ANN-NEW-1 下書きは先頭10件の枠を使わない', function () {
     );
 });
 
-test('REQ-ANN-NEW-1 作成が新しい公開対象の先頭10件を出す', function () {
+test('REQ-ANN-12 作成が新しい公開対象の先頭10件を出す', function () {
     $now = now()->startOfSecond();
     $start = $now->copy()->subDay();
     $shown = [];
@@ -294,7 +294,7 @@ test('REQ-ANN-NEW-1 作成が新しい公開対象の先頭10件を出す', func
     );
 });
 
-test('REQ-ANN-NEW-1 タイトルの文字符号点が小さい公開対象の先頭10件を出す', function () {
+test('REQ-ANN-12 タイトルの文字符号点が小さい公開対象の先頭10件を出す', function () {
     $now = now()->startOfSecond();
     $start = $now->copy()->subDay();
     $created = $now->copy()->subHour();
@@ -333,7 +333,7 @@ test('REQ-ANN-NEW-1 タイトルの文字符号点が小さい公開対象の先
     );
 });
 
-test('REQ-ANN-NEW-1 開始と作成時刻とタイトルが同じでも10件に限る', function () {
+test('REQ-ANN-12 開始と作成時刻とタイトルが同じでも10件に限る', function () {
     $now = now()->startOfSecond();
     $start = $now->copy()->subDay();
     $created = $now->copy()->subHour();
@@ -362,7 +362,7 @@ test('REQ-ANN-NEW-1 開始と作成時刻とタイトルが同じでも10件に�
         ->and(substr_count($response->getContent(), '同点題名'))->toBe(10);
 });
 
-test('REQ-ANN-NEW-1 REQ-ANN-NEW-2 REQ-ANN-NEW-3 各入口は同じ先頭10件を出し11件目以降と省略の知らせは出さない', function () {
+test('REQ-ANN-12 REQ-ANN-13 REQ-ANN-14 各入口は同じ先頭10件を出し11件目以降と省略の知らせは出さない', function () {
     $prefix = announcementsBeyondTheListLimit();
     $user = User::factory()->create();
 
@@ -423,7 +423,7 @@ test('REQ-ANN-NEW-1 REQ-ANN-NEW-2 REQ-ANN-NEW-3 各入口は同じ先頭10件を
     );
 });
 
-test('REQ-ANN-NEW-1 管理者とそれ以外には同じ先頭10件が出る', function () {
+test('REQ-ANN-12 管理者とそれ以外には同じ先頭10件が出る', function () {
     $prefix = announcementsBeyondTheListLimit();
     $admin = User::factory()->create(['admin' => true]);
     $member = User::factory()->create();
@@ -442,7 +442,7 @@ test('REQ-ANN-NEW-1 管理者とそれ以外には同じ先頭10件が出る', f
     );
 });
 
-test('REQ-ANN-1 REQ-ANN-NEW-3 公開対象が0件のときは空の文言だけで省略の知らせは無い', function () {
+test('REQ-ANN-1 REQ-ANN-14 公開対象が0件のときは空の文言だけで省略の知らせは無い', function () {
     $response = $this->actingAs(User::factory()->create())->get('/dashboard');
 
     $response->assertOk()

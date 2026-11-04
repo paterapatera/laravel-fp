@@ -1,6 +1,14 @@
 # Update Log
 
 
+
+## 2026-11-05
+* **Added**: NFR-ANN-1 in [お知らせの閲覧](/specs/announcements/read/)
+* **Modified**: Definitions in [お知らせの閲覧](/specs/announcements/read/)
+* **Modified**: REQ-ANN-1 - 一覧に含める公開対象だけに、タイトルと要約を求める。
+* **Added**: REQ-ANN-12 in [お知らせの閲覧](/specs/announcements/read/)
+* **Added**: REQ-ANN-13 in [お知らせの閲覧](/specs/announcements/read/)
+* **Added**: REQ-ANN-14 in [お知らせの閲覧](/specs/announcements/read/)
 ## 2026-11-01
 * **Modified**: Scope in [お知らせの登録](/specs/announcements/register/)
 * **Modified**: Definitions in [お知らせの登録](/specs/announcements/register/)
