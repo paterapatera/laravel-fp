@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-const PACKAGE_VERSION = "1.1.0";
+const PACKAGE_VERSION = "1.2.1";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
@@ -546,6 +546,128 @@ Entry heading format: \`## YYYY-MM-DD <skill> — <kind>\`
 After the person confirms lesson records at close, add \`- Lessons: <kebab-slug>\` or \`- Lessons: excluded: <reason>\` to each feedback entry and to each **top-level** \`N. Fix:\` major in task.md (not to nested \`N.M. Fix:\` minors).
 `;
 
+/**
+ * Fetch and fast-forward the local base branch from its upstream remote.
+ * Does not checkout branches; updates the local base ref only via git fetch.
+ */
+
+function trimSha(sha) {
+  return sha.trim().slice(0, 7);
+}
+
+function listRemotes(root, git) {
+  return git(root, ["remote"]).stdout.split("\n").map((line) => line.trim()).filter(Boolean);
+}
+
+function resolveFetchRemote(root, base, git) {
+  const remotes = listRemotes(root, git);
+  if (!remotes.length) return { status: "none" };
+
+  const hasLocal = git(root, ["rev-parse", "--verify", `refs/heads/${base}`]).status === 0;
+  if (hasLocal) {
+    const upstream = git(root, ["rev-parse", "--abbrev-ref", "--symbolic-full-name", `${base}@{upstream}`]);
+    if (upstream.status === 0) {
+      const full = upstream.stdout.trim();
+      const slash = full.indexOf("/");
+      if (slash > 0) return { status: "ok", remote: full.slice(0, slash) };
+    }
+  }
+
+  if (remotes.includes("origin")) return { status: "ok", remote: "origin" };
+  if (remotes.length === 1) return { status: "ok", remote: remotes[0] };
+  return { status: "ambiguous", remotes };
+}
+
+function ambiguousRemoteMessage(base, remotes) {
+  const names = remotes.join(", ");
+  return `sync-base: several remotes (${names}) with no upstream on ${base}; pick one remote and run git remote set-branches --add <remote> ${base} && git fetch <remote> ${base}, then git branch --track ${base} <remote>/${base} if local ${base} is missing, or git branch --set-upstream-to=<remote>/${base} ${base} if it already exists; then retry\n`;
+}
+
+function checkedOutRefusal(text) {
+  return /checked out|cannot lock ref|is checked out at|would be overwritten by/i.test(text);
+}
+
+function checkedOutMessage(base) {
+  return `sync-base: ${base} is checked out in this or another worktree; switch to your feature branch here, or run git pull --ff-only where ${base} is checked out\n`;
+}
+
+function runSyncBase(root, baseBranch, git) {
+  const base = baseBranch || "main";
+  const resolved = resolveFetchRemote(root, base, git);
+
+  if (resolved.status === "none") {
+    return { code: 0, stdout: "sync-base: no git remote; using local base branch only\n", stderr: "" };
+  }
+  if (resolved.status === "ambiguous") {
+    return {
+      code: 1,
+      stdout: "",
+      stderr: ambiguousRemoteMessage(base, resolved.remotes),
+    };
+  }
+
+  const remote = resolved.remote;
+  const remoteTracking = `refs/remotes/${remote}/${base}`;
+  const fetchRemote = git(root, [
+    "fetch",
+    remote,
+    `+refs/heads/${base}:${remoteTracking}`,
+  ]);
+  if (fetchRemote.status !== 0) {
+    const detail = `${fetchRemote.stderr || ""}${fetchRemote.stdout || ""}`.trim()
+      || `git fetch ${remote} refs/heads/${base} failed`;
+    return { code: 1, stdout: "", stderr: `sync-base: fetch failed: ${detail}\n` };
+  }
+
+  const remoteRev = git(root, ["rev-parse", "--verify", remoteTracking]);
+  if (remoteRev.status !== 0) {
+    return {
+      code: 1,
+      stdout: "",
+      stderr: `sync-base: could not fetch refs/heads/${base} from ${remote} (branch missing or no permission)\n`,
+    };
+  }
+  const target = remoteRev.stdout.trim();
+
+  const localRevResult = git(root, ["rev-parse", "--verify", `refs/heads/${base}`]);
+  const hadLocal = localRevResult.status === 0;
+  const oldLocal = hadLocal ? localRevResult.stdout.trim() : "";
+
+  if (hadLocal) {
+    const ahead = git(root, ["rev-list", "--count", `${target}..${base}`]);
+    const aheadCount = Number.parseInt(ahead.stdout.trim(), 10) || 0;
+    if (aheadCount > 0) {
+      return {
+        code: 1,
+        stdout: "",
+        stderr: `sync-base: local ${base} has ${aheadCount} commit(s) not on ${remote}/${base}; resolve or push before close\n`,
+      };
+    }
+  }
+
+  if (hadLocal && oldLocal === target) {
+    return { code: 0, stdout: `sync-base: ${base} already up to date (${trimSha(target)})\n`, stderr: "" };
+  }
+
+  const localFetch = git(root, ["fetch", ".", `${remoteTracking}:refs/heads/${base}`]);
+  if (localFetch.status !== 0) {
+    const detail = `${localFetch.stderr || ""}${localFetch.stdout || ""}`.trim() || "local fast-forward failed";
+    if (checkedOutRefusal(detail)) {
+      return { code: 1, stdout: "", stderr: checkedOutMessage(base) };
+    }
+    return { code: 1, stdout: "", stderr: `sync-base: could not update ${base}: ${detail}\n` };
+  }
+
+  if (!hadLocal) {
+    return { code: 0, stdout: `sync-base: created local ${base} at ${trimSha(target)} from ${remote}/${base}\n`, stderr: "" };
+  }
+  return {
+    code: 0,
+    stdout: `sync-base: fast-forwarded ${base} from ${trimSha(oldLocal)} to ${trimSha(target)}\n`,
+    stderr: "",
+  };
+}
+
 function headingNodes(markdown) {
   const lines = markdown.replace(/\r\n/g, "\n").split("\n");
   const heads = [];
@@ -964,6 +1086,475 @@ function shallProblem(sentence, lang) {
 function scenarioBlocks(body) {
   const nodes = headingNodes(body);
   return nodes.filter((node) => /^Scenario:/.test(node.title));
+}
+
+const PROCESS_TYPES = new Set(["EI", "EO", "EQ"]);
+const PROCESS_POINTS = { EI: 4, EO: 5, EQ: 4 };
+
+function normalizeProcessName(name) {
+  return name.trim().replace(/\s+/g, " ");
+}
+
+/** Parse `- Process: none` or `- Process: Name (EI|EO|EQ)`. */
+function parseProcessField(content) {
+  if (/^-\s+Process:\s*none\s*$/m.test(content)) return { none: true };
+  const match = /^-\s+Process:\s*(.+)\s+\((EI|EO|EQ)\)\s*$/m.exec(content);
+  if (!match) return null;
+  return { name: normalizeProcessName(match[1]), type: match[2] };
+}
+
+function specHeadingBlock(body, id) {
+  const node = headingNodes(body).find((item) => item.level === 3 && (item.title === id || item.title.startsWith(`${id}:`)));
+  return node ? node.full : "";
+}
+
+function specKnowledgeRel(docsDir, specPath) {
+  return `${docsDir.replace(/\/+$/, "")}${specPath}`;
+}
+
+function reqBlockFromSpecText(text, id) {
+  if (typeof text !== "string") return "";
+  return specHeadingBlock(splitFrontmatter(text).body, id);
+}
+
+function reqBlockFromContext(specPath, id, ctx) {
+  if (!ctx?.docsDir || !specPath.endsWith("/spec.md")) return "";
+  const rel = specKnowledgeRel(ctx.docsDir, specPath);
+  let block = reqBlockFromSpecText(ctx.knowledgeMap?.get(rel), id);
+  if (block) return block;
+  if (ctx.readGitAtBase) block = reqBlockFromSpecText(ctx.readGitAtBase(rel), id);
+  return block;
+}
+
+function processNamesInSpecText(text) {
+  const names = new Set();
+  if (typeof text !== "string") return names;
+  const body = splitFrontmatter(text).body;
+  for (const node of headingNodes(body)) {
+    if (node.level !== 3 || !node.title.startsWith("REQ-")) continue;
+    const parsed = parseProcessField(node.full);
+    if (parsed && !parsed.none) names.add(parsed.name);
+  }
+  return names;
+}
+
+/** True when `Process:` name appears on a REQ in base-branch specs only (`readGitAtBase`). */
+function processNameExistsInBase(name, ctx, specPaths) {
+  if (!ctx?.readGitAtBase || !ctx?.docsDir) return false;
+  const target = normalizeProcessName(name);
+  for (const specPath of specPaths) {
+    const rel = specKnowledgeRel(ctx.docsDir, specPath);
+    const fromBase = processNamesInSpecText(ctx.readGitAtBase(rel));
+    if (fromBase.has(target)) return true;
+  }
+  return false;
+}
+
+function processFromDeltaSibling(item, ctx) {
+  const delta = ctx?.delta;
+  if (!delta) return "";
+  const file = delta.files.find((entry) => entry.path === item.file);
+  if (!file) return "";
+  for (const bucket of ["added", "modified"]) {
+    for (const entry of file[bucket]) {
+      const id = entry.title.split(":")[0].trim();
+      if (id !== item.id) continue;
+      const parsed = parseProcessField(entry.content);
+      if (parsed) return entry.content;
+    }
+  }
+  return "";
+}
+
+function resolveReqProcess(item, ctx) {
+  let parsed = parseProcessField(item.content);
+  if (!parsed && item.bucket === "REMOVED") {
+    parsed = parseProcessField(processFromDeltaSibling(item, ctx) || reqBlockFromContext(item.file, item.id, ctx));
+  }
+  if (!parsed) return { unknown: true };
+  if (parsed.none) return { none: true };
+  return parsed;
+}
+
+function bucketForProcessGroup(entries, ctx, specPaths) {
+  if (entries.every((entry) => entry.bucket === "REMOVED")) return "REMOVED";
+  const name = entries[0].process.name;
+  if (entries.some((entry) => entry.bucket === "MODIFIED" || entry.bucket === "REMOVED")) return "MODIFIED";
+  if (processNameExistsInBase(name, ctx, specPaths)) return "MODIFIED";
+  return "ADDED";
+}
+
+function collectProcessGroups(reqEntries, ctx, specPaths) {
+  const groups = new Map();
+  const noneCounts = { ADDED: 0, MODIFIED: 0, REMOVED: 0 };
+  const unknownCounts = { ADDED: 0, MODIFIED: 0, REMOVED: 0 };
+  let reqCount = 0;
+
+  for (const entry of reqEntries) {
+    reqCount += 1;
+    const resolved = resolveReqProcess(entry, ctx);
+    if (resolved.unknown) {
+      unknownCounts[entry.bucket] += 1;
+      continue;
+    }
+    if (resolved.none) {
+      noneCounts[entry.bucket] += 1;
+      continue;
+    }
+    const key = `${resolved.name}\0${resolved.type}`;
+    if (!groups.has(key)) {
+      groups.set(key, { name: resolved.name, type: resolved.type, reqs: [] });
+    }
+    groups.get(key).reqs.push({ ...entry, process: resolved });
+  }
+
+  const processes = [];
+  for (const group of groups.values()) {
+    const bucket = bucketForProcessGroup(group.reqs, ctx, specPaths);
+    processes.push({
+      name: group.name,
+      type: group.type,
+      bucket,
+      points: PROCESS_POINTS[group.type],
+    });
+  }
+  processes.sort((left, right) => left.name.localeCompare(right.name) || left.type.localeCompare(right.type));
+
+  return {
+    processes,
+    noneCounts,
+    unknownCounts,
+    reqCount,
+    processCount: processes.length,
+  };
+}
+
+/** Custom metric: NESMA estimated weights per elementary process; not IFPUG/NESMA-certified. */
+const FP_METRIC_LABEL = "sdd-orc custom (NESMA estimated, per process)";
+
+const COUNTABLE_ID_RE = /^(REQ|IF|DATA|NFR)-[A-Z]{2,6}-(?:NEW-\d+|\d+)$/;
+
+const POINTS = {
+  DATA: 7,
+  IF_CONSUMED: 5,
+  IF_PROVIDED: 4,
+  NFR: 0,
+};
+
+const FP_BUCKET_PRECEDENCE = { REMOVED: 3, MODIFIED: 2, ADDED: 1 };
+
+/** Kinds in pull request table (process types replace per-REQ). */
+const FP_PR_KINDS = ["DATA", "EI", "EO", "EQ", "IF_CONSUMED", "IF_PROVIDED"];
+
+function itemId(title) {
+  return title.split(":")[0].trim();
+}
+
+function isCountableId(id) {
+  return COUNTABLE_ID_RE.test(id);
+}
+
+function ifDirection(content) {
+  if (/^-\s+Direction:\s*Consumed/m.test(content)) return "Consumed";
+  if (/^-\s+Direction:\s*Provided/m.test(content)) return "Provided";
+  return "";
+}
+
+function idBlock(body, id) {
+  const node = headingNodes(body).find((item) => item.level === 3 && (item.title === id || item.title.startsWith(`${id}:`)));
+  return node ? node.full : "";
+}
+
+function knowledgeRel(docsDir, interfacesPath) {
+  return `${docsDir.replace(/\/+$/, "")}${interfacesPath}`;
+}
+
+function interfaceBodyFromMarkdown(text, id) {
+  if (typeof text !== "string") return "";
+  return idBlock(splitFrontmatter(text).body, id);
+}
+
+function knowledgeInterfaceBody(knowledgeMap, docsDir, interfacesPath, id) {
+  if (!knowledgeMap || !interfacesPath.endsWith("/interfaces.md")) return "";
+  const text = knowledgeMap.get(knowledgeRel(docsDir, interfacesPath));
+  return interfaceBodyFromMarkdown(text, id);
+}
+
+function addedDirectionInDelta(delta, interfacesPath, id) {
+  if (!delta) return "";
+  const file = delta.files.find((entry) => entry.path === interfacesPath);
+  if (!file) return "";
+  const added = file.added.find((entry) => itemId(entry.title) === id);
+  return added ? ifDirection(added.content) : "";
+}
+
+function resolveIfDirection(id, content, interfacesPath, bucket, ctx) {
+  const fromDelta = ifDirection(content);
+  if (fromDelta) return fromDelta;
+  if (!id.startsWith("IF-") || bucket !== "REMOVED") return "";
+  let block = knowledgeInterfaceBody(ctx?.knowledgeMap, ctx?.docsDir, interfacesPath, id);
+  if (block) return ifDirection(block);
+  if (ctx?.readGitAtBase) {
+    const rel = knowledgeRel(ctx.docsDir, interfacesPath);
+    block = interfaceBodyFromMarkdown(ctx.readGitAtBase(rel), id);
+    if (block) return ifDirection(block);
+  }
+  return addedDirectionInDelta(ctx?.delta, interfacesPath, id);
+}
+
+function itemKind(id, content, interfacesPath = "", bucket = "", ctx = null) {
+  if (id.startsWith("DATA-")) return "DATA";
+  if (id.startsWith("NFR-")) return "NFR";
+  if (id.startsWith("IF-")) {
+    const direction = resolveIfDirection(id, content, interfacesPath, bucket, ctx);
+    if (direction === "Consumed") return "IF_CONSUMED";
+    if (direction === "Provided") return "IF_PROVIDED";
+    return "IF_UNSET";
+  }
+  return "OTHER";
+}
+
+function pointsForId(id, content, interfacesPath = "", bucket = "", ctx = null) {
+  if (id.startsWith("DATA-")) return POINTS.DATA;
+  if (id.startsWith("NFR-")) return POINTS.NFR;
+  if (id.startsWith("REQ-")) return 0;
+  if (id.startsWith("IF-")) {
+    const direction = resolveIfDirection(id, content, interfacesPath, bucket, ctx);
+    if (direction === "Consumed") return POINTS.IF_CONSUMED;
+    if (direction === "Provided") return POINTS.IF_PROVIDED;
+    return 0;
+  }
+  return 0;
+}
+
+function collectDedupedEntries(delta, filterFn) {
+  const seenInBucket = new Set();
+  const byFileId = new Map();
+  for (const file of delta.files) {
+    if (file.path.startsWith("/steering/")) continue;
+    for (const bucket of ["added", "modified", "removed"]) {
+      const bucketUpper = bucket.toUpperCase();
+      for (const entry of file[bucket]) {
+        const id = itemId(entry.title);
+        if (!isCountableId(id) || !filterFn(id, file.path)) continue;
+        const bucketDup = `${file.path}\0${bucketUpper}\0${id}`;
+        if (seenInBucket.has(bucketDup)) continue;
+        seenInBucket.add(bucketDup);
+        const row = { id, bucket: bucketUpper, file: file.path, content: entry.content };
+        const fileIdKey = `${file.path}\0${id}`;
+        const existing = byFileId.get(fileIdKey);
+        if (!existing || FP_BUCKET_PRECEDENCE[bucketUpper] > FP_BUCKET_PRECEDENCE[existing.bucket]) {
+          byFileId.set(fileIdKey, row);
+        }
+      }
+    }
+  }
+  return [...byFileId.values()];
+}
+
+function specPathsFromDelta(delta) {
+  return [...new Set(delta.files.filter((file) => file.path.endsWith("/spec.md")).map((file) => file.path))];
+}
+
+function countDeltaItems(delta, ctx = null) {
+  const specPaths = specPathsFromDelta(delta);
+  const reqEntries = collectDedupedEntries(delta, (id, filePath) => id.startsWith("REQ-") && filePath.endsWith("/spec.md"));
+  const processCtx = ctx ? { ...ctx, delta } : { delta };
+  const grouped = collectProcessGroups(reqEntries, processCtx, specPaths);
+
+  const processItems = grouped.processes.map((process) => ({
+    id: process.name,
+    kind: process.type,
+    bucket: process.bucket,
+    file: "",
+    points: process.points,
+  }));
+
+  const nonReqItems = [];
+  for (const entry of collectDedupedEntries(delta, (id) => !id.startsWith("REQ-"))) {
+    const kind = itemKind(entry.id, entry.content, entry.file, entry.bucket, ctx);
+    const points = pointsForId(entry.id, entry.content, entry.file, entry.bucket, ctx);
+    nonReqItems.push({ id: entry.id, kind, bucket: entry.bucket, file: entry.file, points });
+  }
+
+  const items = [...processItems, ...nonReqItems];
+  items.sort((left, right) => left.file.localeCompare(right.file) || left.bucket.localeCompare(right.bucket) || left.id.localeCompare(right.id));
+
+  const summary = buildFpSummary(items, grouped);
+  const total = summary.total;
+  const byKind = { DATA: summary.points.DATA, IF: summary.points.IF_CONSUMED + summary.points.IF_PROVIDED, NFR: 0, REQ: 0 };
+  return { total, items, byKind, summary };
+}
+
+function buildFpSummary(items, grouped = null) {
+  const itemCounts = Object.fromEntries(FP_PR_KINDS.map((kind) => [kind, { ADDED: 0, MODIFIED: 0, REMOVED: 0 }]));
+  itemCounts.NFR = { ADDED: 0, MODIFIED: 0, REMOVED: 0 };
+  const points = Object.fromEntries(FP_PR_KINDS.map((kind) => [kind, 0]));
+  const ifUnset = { itemCounts: { ADDED: 0, MODIFIED: 0, REMOVED: 0 }, points: 0 };
+
+  for (const row of items) {
+    if (row.kind === "NFR") {
+      itemCounts.NFR[row.bucket] += 1;
+      continue;
+    }
+    if (row.kind === "IF_UNSET") {
+      ifUnset.itemCounts[row.bucket] += 1;
+      continue;
+    }
+    if (PROCESS_POINTS[row.kind] != null) {
+      itemCounts[row.kind][row.bucket] += 1;
+      points[row.kind] += row.points;
+      continue;
+    }
+    if (!FP_PR_KINDS.includes(row.kind)) continue;
+    itemCounts[row.kind][row.bucket] += 1;
+    points[row.kind] += row.points;
+  }
+
+  const emptyCounts = () => ({ ADDED: 0, MODIFIED: 0, REMOVED: 0 });
+  const processNone = { itemCounts: grouped?.noneCounts || emptyCounts(), points: 0 };
+  const processUnknown = { itemCounts: grouped?.unknownCounts || emptyCounts(), points: 0 };
+
+  return {
+    total: Object.values(points).reduce((sum, value) => sum + value, 0),
+    points,
+    itemCounts,
+    ifUnset,
+    processNone,
+    processUnknown,
+    reqCount: grouped?.reqCount || 0,
+    processCount: grouped?.processCount || 0,
+  };
+}
+
+function countIssueFunctionPoints(issueFiles, ctx = null) {
+  const quick = !issueFiles.requirements && !issueFiles.design && !!issueFiles.task;
+  if (quick || !issueFiles.requirements) {
+    return {
+      skipped: true,
+      reason: quick ? "quick_issue" : "no_requirements",
+      total: 0,
+      items: [],
+      byKind: { REQ: 0, DATA: 0, IF: 0, NFR: 0 },
+      summary: buildFpSummary([]),
+      metric: FP_METRIC_LABEL,
+      laterAddedNote: "Later-added requirements are not reported separately (needs timestamps or non-mechanical comparison).",
+    };
+  }
+  const parts = [parseDeltaMarkdown(issueFiles.requirements, "requirements")];
+  if (issueFiles.design) parts.push(parseDeltaMarkdown(issueFiles.design, "design"));
+  if (issueFiles.research) parts.push(parseDeltaMarkdown(issueFiles.research, "research"));
+  const delta = mergeDeltas(parts);
+  const mergedCtx = ctx ? { ...ctx, delta } : { delta };
+  const { total, items, byKind, summary } = countDeltaItems(delta, mergedCtx);
+  return {
+    skipped: false,
+    reason: "",
+    total,
+    items,
+    byKind,
+    summary,
+    metric: FP_METRIC_LABEL,
+    laterAddedNote: "Later-added requirements are not reported separately (needs timestamps or non-mechanical comparison).",
+  };
+}
+
+function countCell(counts) {
+  return `A${counts.ADDED}/M${counts.MODIFIED}/R${counts.REMOVED}`;
+}
+
+function unsetItems(ifUnset) {
+  return ifUnset.itemCounts.ADDED + ifUnset.itemCounts.MODIFIED + ifUnset.itemCounts.REMOVED;
+}
+
+function nfrItems(nfrCounts) {
+  if (!nfrCounts) return 0;
+  return nfrCounts.ADDED + nfrCounts.MODIFIED + nfrCounts.REMOVED;
+}
+
+function countItems(counts) {
+  return counts.ADDED + counts.MODIFIED + counts.REMOVED;
+}
+
+function formatFpForPullRequest(result, lang = "en") {
+  if (result.skipped && result.reason === "quick_issue") {
+    return lang === "ja"
+      ? "## 機能ポイント\n\nquick issue のため機能ポイントは数えません（requirements.md がありません）。\n"
+      : "## Function points\n\nNot counted for quick issues (no requirements delta).\n";
+  }
+  if (result.skipped) {
+    return "";
+  }
+  const { summary } = result;
+  const rows = FP_PR_KINDS.map((kind) => {
+    const label = kind === "IF_CONSUMED" ? (lang === "ja" ? "IF（Consumed）" : "IF Consumed")
+      : kind === "IF_PROVIDED" ? (lang === "ja" ? "IF（Provided）" : "IF Provided")
+        : kind;
+    return { kind, label, points: summary.points[kind], counts: summary.itemCounts[kind] };
+  }).filter((row) => row.points > 0 || countItems(row.counts) > 0);
+  const note = lang === "ja"
+    ? "NESMA 概算の EI/EO/EQ 重みで、**プロセス**（Process 名）ごとに 1 回だけ数えるカスタム指標です。変更は満点で数えます。IFPUG/NESMA 準拠ではありません。"
+    : "Custom count: one **process** (`Process:` name) at NESMA estimated EI/EO/EQ weights; changes use full weight (not IFPUG/NESMA-compliant).";
+  const heading = lang === "ja" ? "## 機能ポイント" : "## Function points";
+  const totalLine = lang === "ja" ? `合計 **${summary.total}** FP。` : `Total **${summary.total}** FP.`;
+  const tableHead = lang === "ja"
+    ? "| 種別 | FP | ADDED/MODIFIED/REMOVED |\n|---|---|---|"
+    : "| Kind | FP | ADDED/MODIFIED/REMOVED |\n|---|---|---|";
+  const tableBody = rows.map((row) => `| ${row.label} | ${row.points} | ${countCell(row.counts)} |`).join("\n");
+  const metaLine = lang === "ja"
+    ? `\nREQ ${summary.reqCount} 件 / プロセス ${summary.processCount} 件。\n`
+    : `\nREQs: ${summary.reqCount}; distinct processes: ${summary.processCount}.\n`;
+  const unsetLine = unsetItems(summary.ifUnset)
+    ? (lang === "ja"
+      ? `IF（Direction 不明）: ${countCell(summary.ifUnset.itemCounts)}（0 FP）\n`
+      : `IF unset (no Direction): ${countCell(summary.ifUnset.itemCounts)} (0 FP)\n`)
+    : "";
+  const noneLine = countItems(summary.processNone.itemCounts)
+    ? (lang === "ja"
+      ? `Process: none の REQ: ${countCell(summary.processNone.itemCounts)}（0 FP）\n`
+      : `Process: none REQs: ${countCell(summary.processNone.itemCounts)} (0 FP)\n`)
+    : "";
+  const unknownLine = countItems(summary.processUnknown.itemCounts)
+    ? (lang === "ja"
+      ? `不明プロセス: ${countCell(summary.processUnknown.itemCounts)}（0 FP）\n`
+      : `Unknown process: ${countCell(summary.processUnknown.itemCounts)} (0 FP)\n`)
+    : "";
+  const nfrLine = nfrItems(summary.itemCounts.NFR)
+    ? (lang === "ja"
+      ? `NFR: ${countCell(summary.itemCounts.NFR)}（0 FP）\n`
+      : `NFR: ${countCell(summary.itemCounts.NFR)} (0 FP)\n`)
+    : "";
+  return `${heading}\n\n${totalLine} ${note}\n\n${tableHead}\n${tableBody}${metaLine}${unsetLine}${noneLine}${unknownLine}${nfrLine}\n`;
+}
+
+function formatFpReport(issue, result, format) {
+  if (format === "json") {
+    return `${JSON.stringify({ issue, ...result }, null, 2)}\n`;
+  }
+  if (result.skipped) {
+    return `issue: ${issue}\nskipped: ${result.reason}\nmetric: ${result.metric}\n`;
+  }
+  const lines = [
+    `issue: ${issue}`,
+    `total: ${result.total}`,
+    `metric: ${result.metric}`,
+    "rules: DATA 7; IF Consumed 5; IF Provided 4; EI 4 EO 5 EQ 4 per process; Process none 0; one id per file (REMOVED>MODIFIED>ADDED)",
+    `REQs: ${result.summary.reqCount}; processes: ${result.summary.processCount}`,
+    result.laterAddedNote,
+  ];
+  const unset = unsetItems(result.summary.ifUnset);
+  if (unset) lines.push(`IF unset (no Direction): ${countCell(result.summary.ifUnset.itemCounts)} (0 FP)`);
+  if (countItems(result.summary.processNone.itemCounts)) {
+    lines.push(`Process: none REQs: ${countCell(result.summary.processNone.itemCounts)} (0 FP)`);
+  }
+  if (countItems(result.summary.processUnknown.itemCounts)) {
+    lines.push(`Unknown process: ${countCell(result.summary.processUnknown.itemCounts)} (0 FP)`);
+  }
+  lines.push("");
+  for (const row of result.items) {
+    lines.push(`${row.id}\t${row.bucket}\t${row.file}\t${row.points}`);
+  }
+  return `${lines.join("\n").replace(/\n+$/, "")}\n`;
 }
 
 const SPEC_FILES = ["spec.md", "interfaces.md", "data.md", "quality.md"];
@@ -2315,6 +2906,7 @@ function staticIssueDiags(root, config, issue, stage) {
   validateDeltaHeadings(delta, diags);
   validateOwnership(delta, diags);
   validateDeltaEars(delta, config.lang || "en", diags);
+  validateDeltaProcesses(delta, diags);
   validateDeltaIds(root, config, delta, diags);
   if (files.design) validateTraceability(files, delta, config, issue, diags);
   if (files.design) validateDesignMechanical(files, config, issue, diags);
@@ -2400,6 +2992,29 @@ function validateDeltaEars(delta, lang, diags) {
           for (const key of ["given", "when", "then"]) if (!text.includes(ears[key])) diags.push(diag(file.path, item.line, "EARS_SCENARIO", `${item.title} scenario is missing ${ears[key]}`));
         }
       }
+    }
+  }
+}
+
+function validateDeltaProcesses(delta, diags) {
+  const processTypes = new Map();
+  for (const file of delta.files) {
+    if (!file.path.endsWith("/spec.md")) continue;
+    for (const item of [...file.added, ...file.modified]) {
+      if (!item.title.startsWith("REQ-")) continue;
+      const parsed = parseProcessField(item.content);
+      if (!parsed) {
+        diags.push(diag(file.path, item.line, "REQ_PROCESS", `${item.title.split(":")[0].trim()} requires a Process line (- Process: none or - Process: <name> (EI|EO|EQ))`));
+        continue;
+      }
+      if (parsed.none) continue;
+      const name = normalizeProcessName(parsed.name);
+      const existing = processTypes.get(name);
+      if (existing && existing !== parsed.type) {
+        diags.push(diag(file.path, item.line, "REQ_PROCESS", `Process ${name} cannot be both ${existing} and ${parsed.type} in one issue`));
+        continue;
+      }
+      processTypes.set(name, parsed.type);
     }
   }
 }
@@ -2704,17 +3319,22 @@ function runCommand(start, argv) {
   }
   const opts = parseScriptArgs(argv);
   const command = opts._[0] || "";
-  if (!command || opts.unknown || !["check", "stamp", "apply", "renumber", "index", "status"].includes(command)) {
-    return { code: 2, stdout: "Usage: sdd.mjs check|stamp|apply|renumber|index|status [options]\n", stderr: "" };
+  if (!command || opts.unknown || !["check", "stamp", "apply", "renumber", "index", "status", "fp", "sync-base"].includes(command)) {
+    return { code: 2, stdout: "Usage: sdd.mjs check|stamp|apply|renumber|index|status|fp|sync-base [options]\n", stderr: "" };
   }
   const root = findRoot(start);
   if (!root) return { code: 2, stdout: "", stderr: "sdd.config.json:1: USAGE Run this command inside a repository.\n" };
   const config = readConfig(root);
-  if (command !== "check") {
+  if (command !== "check" && command !== "fp" && command !== "sync-base") {
     const setup = setupDiags(root, config);
     const blocking = setup.filter((item) => item.rule !== "SETUP_STEERING_MISSING");
     if (blocking.length) return { code: exitCode(blocking), stdout: output(blocking, opts.format), stderr: "" };
   }
+  if (command === "sync-base") {
+    const base = opts.base || config.baseBranch || "main";
+    return runSyncBase(root, base, (cwd, args) => git(cwd, args));
+  }
+  if (command === "fp") return runFp(root, config, opts);
   if (command === "index") {
     const tree = loadTree(root, kdir(config));
     const before = cloneTree(tree);
@@ -2841,6 +3461,26 @@ function listIssues(root, config) {
   const dir = path.join(root, config.docsDir, "issues");
   if (!fs.existsSync(dir)) return [];
   return fs.readdirSync(dir, { withFileTypes: true }).filter((entry) => entry.isDirectory()).map((entry) => entry.name).sort();
+}
+
+function runFp(root, config, opts) {
+  const configDiags = setupDiags(root, config).filter((item) => item.rule !== "SETUP_STEERING_MISSING");
+  if (configDiags.length) return { code: exitCode(configDiags), stdout: output(configDiags, opts.format), stderr: "" };
+  const issue = resolveIssue(root, config, opts.issue);
+  if (!issue) {
+    return { code: 2, stdout: "", stderr: "sdd.mjs fp:1: USAGE Pass --issue <name> or run on a feature branch\n" };
+  }
+  if (!fs.existsSync(issueDir(root, config, issue))) {
+    const diags = [diag(`${config.docsDir}/issues/${issue}`, 1, "ISSUE_NOT_FOUND", "The issue directory does not exist")];
+    return { code: 2, stdout: output(diags, opts.format), stderr: "" };
+  }
+  const files = readIssue(root, config, issue);
+  const docsDir = kdir(config);
+  const baseBranch = config.baseBranch || "main";
+  const knowledgeMap = loadTree(root, docsDir);
+  const readGitAtBase = (rel) => gitFile(root, baseBranch, rel);
+  const result = countIssueFunctionPoints(files, { knowledgeMap, docsDir, readGitAtBase });
+  return { code: 0, stdout: formatFpReport(issue, result, opts.format), stderr: "" };
 }
 
 function runStatus(root, config, opts) {
